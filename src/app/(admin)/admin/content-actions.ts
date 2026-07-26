@@ -401,6 +401,9 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
   const transliteration = String(formData.get('transliteration') ?? '').trim() || null
   const levelId = String(formData.get('levelId') ?? 'ha')
   const notes = String(formData.get('notes') ?? '').trim() || null
+  const audioSlow = String(formData.get('audioSlow') ?? '').trim() || null
+  const audioNormal = String(formData.get('audioNormal') ?? '').trim() || null
+  const audioNatural = String(formData.get('audioNatural') ?? '').trim() || null
 
   if (!id || !amharic || !english) return
 
@@ -413,6 +416,9 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
       transliteration,
       level_id: levelId,
       notes,
+      audio_slow_path: audioSlow,
+      audio_normal_path: audioNormal,
+      audio_natural_path: audioNatural,
       updated_at: nowIso(),
     })
     .eq('id', id)

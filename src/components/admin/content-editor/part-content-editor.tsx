@@ -57,6 +57,11 @@ type VocabOption = {
   amharic: string
   english: string
   transliteration: string | null
+  exampleAmharic?: string | null
+  exampleEnglish?: string | null
+  audioSlow?: string | null
+  audioNormal?: string | null
+  audioNatural?: string | null
 }
 
 type PartContentEditorProps = {
@@ -518,6 +523,7 @@ function BlockFields({
       )
     case 'vocabulary_set':
     case 'flashcard_revision':
+    case 'listening_practice':
       return (
         <div className="space-y-3">
           {'title' in block ? (
@@ -530,6 +536,16 @@ function BlockFields({
               />
             </div>
           ) : null}
+          {block.type === 'listening_practice' ? (
+            <div>
+              <Label>Prompt</Label>
+              <Input
+                className="mt-1.5"
+                value={block.prompt ?? ''}
+                onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              />
+            </div>
+          ) : null}
           <div>
             <Label>Link vocabulary</Label>
             <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-md border border-cream-300 p-2">
@@ -538,6 +554,7 @@ function BlockFields({
               ) : (
                 vocabularyOptions.map((v) => {
                   const checked = block.vocabularyIds.includes(v.id)
+                  const hasAudio = Boolean(v.audioSlow || v.audioNormal || v.audioNatural)
                   return (
                     <label key={v.id} className="flex items-center gap-2 text-sm">
                       <input
@@ -552,6 +569,11 @@ function BlockFields({
                       />
                       <span className="font-ethiopic">{v.amharic}</span>
                       <span className="text-muted-foreground">— {v.english}</span>
+                      {hasAudio ? (
+                        <span className="rounded bg-gold-100 px-1 text-[10px] font-semibold text-gold-800 uppercase">
+                          audio
+                        </span>
+                      ) : null}
                     </label>
                   )
                 })
@@ -560,10 +582,14 @@ function BlockFields({
           </div>
           {block.type === 'flashcard_revision' ? (
             <div>
-              <Label>Custom cards (front | back per line)</Label>
+              <Label>Custom cards (front | back | optional audio URL)</Label>
               <Textarea
                 className="mt-1.5 font-mono text-xs"
-                value={block.cards.map((c) => `${c.front} | ${c.back}`).join('\n')}
+                value={block.cards
+                  .map((c) =>
+                    [c.front, c.back, c.audioUrl].filter((x) => x !== undefined && x !== '').join(' | '),
+                  )
+                  .join('\n')}
                 onChange={(e) =>
                   onChange({
                     ...block,
@@ -571,12 +597,53 @@ function BlockFields({
                       .split('\n')
                       .filter(Boolean)
                       .map((line) => {
-                        const [front, ...rest] = line.split('|')
-                        return { front: front.trim(), back: rest.join('|').trim() }
+                        const [front, back, audioUrl] = line.split('|').map((s) => s.trim())
+                        return {
+                          front: front ?? '',
+                          back: back ?? '',
+                          audioUrl: audioUrl ?? '',
+                        }
                       }),
                   })
                 }
               />
+            </div>
+          ) : null}
+          {block.type === 'listening_practice' ? (
+            <div>
+              <Label>Custom listening items (audioURL | correct | wrong1 | wrong2)</Label>
+              <Textarea
+                className="mt-1.5 font-mono text-xs"
+                value={block.items
+                  .map((item) =>
+                    [item.audioUrl || item.speakText || '', ...item.options].join(' | '),
+                  )
+                  .join('\n')}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    items: e.target.value
+                      .split('\n')
+                      .filter(Boolean)
+                      .map((line) => {
+                        const parts = line.split('|').map((s) => s.trim())
+                        const audioOrSpeak = parts[0] ?? ''
+                        const options = parts.slice(1).filter(Boolean)
+                        const isUrl = /^https?:\/\//i.test(audioOrSpeak)
+                        return {
+                          audioUrl: isUrl ? audioOrSpeak : '',
+                          speakText: isUrl ? undefined : audioOrSpeak,
+                          options: options.length >= 2 ? options : ['Option A', 'Option B'],
+                          correctIndex: 0,
+                          revealEnglish: options[0],
+                        }
+                      }),
+                  })
+                }
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                First option is treated as the correct answer. Prefer linking vocabulary with audio above.
+              </p>
             </div>
           ) : null}
         </div>
@@ -873,7 +940,16 @@ export function PartContentEditor({
   )
 
   const vocabLookup = useMemo(() => {
-    const map: Record<string, VocabOption> = {}
+    const map: Record<
+      string,
+      VocabOption & {
+        exampleAmharic?: string | null
+        exampleEnglish?: string | null
+        audioSlow?: string | null
+        audioNormal?: string | null
+        audioNatural?: string | null
+      }
+    > = {}
     for (const v of vocabularyOptions) map[v.id] = v
     return map
   }, [vocabularyOptions])

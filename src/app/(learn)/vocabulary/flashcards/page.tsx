@@ -20,7 +20,9 @@ export default async function FlashcardsPage({
 
   let query = supabase
     .from('vocabulary_items')
-    .select('id, amharic, english, transliteration, difficulty_weight, level_id')
+    .select(
+      'id, amharic, english, transliteration, difficulty_weight, level_id, audio_slow_path, audio_normal_path, audio_natural_path',
+    )
     .order('amharic')
     .limit(100)
 
@@ -41,12 +43,18 @@ export default async function FlashcardsPage({
   const cards = (words ?? [])
     .map((w) => {
       const review = reviewMap.get(w.id)
-      const due =
-        !review || new Date(review.next_review_at).getTime() <= now
+      const due = !review || new Date(review.next_review_at).getTime() <= now
       return {
         id: w.id,
         front: w.amharic,
-        back: [w.transliteration, w.english].filter(Boolean).join(' — '),
+        back: w.english,
+        transliteration: w.transliteration ?? undefined,
+        english: w.english,
+        audio: {
+          slow: w.audio_slow_path,
+          normal: w.audio_normal_path,
+          natural: w.audio_natural_path,
+        },
         difficultyWeight: w.difficulty_weight ?? 1,
         due,
         box: review?.box ?? 1,

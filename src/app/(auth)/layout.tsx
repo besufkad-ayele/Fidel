@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AmharicText } from '@/components/shared/amharic-text'
+import { BrandLogo } from '@/components/shared/brand-logo'
 import { routes } from '@/lib/auth/routes'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -8,11 +8,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <aside className="relative hidden overflow-hidden bg-green-700 lg:block">
         <div className="img-card-overlay absolute inset-0" />
         <div className="relative z-10 flex h-full flex-col justify-between p-10 text-cream-50">
-          <Link href={routes.home} className="flex items-center gap-2">
-            <AmharicText size="xl" className="text-gold-400">
-              ፊደል
-            </AmharicText>
-            <span className="font-display text-2xl">Fidel</span>
+          <Link href={routes.home} className="inline-flex items-center gap-3" aria-label="Back to Fidel home">
+            <BrandLogo size={64} showWordmark={false} priority />
+            <span className="font-display text-2xl text-cream-50">Fidel</span>
           </Link>
           <blockquote className="max-w-sm">
             <p className="font-display text-2xl leading-snug">

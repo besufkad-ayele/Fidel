@@ -645,6 +645,9 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
   const english = String(formData.get('english') ?? '').trim()
   const levelId = String(formData.get('levelId') ?? 'ha')
   const transliteration = String(formData.get('transliteration') ?? '').trim() || null
+  const audioSlow = String(formData.get('audioSlow') ?? '').trim() || null
+  const audioNormal = String(formData.get('audioNormal') ?? '').trim() || null
+  const audioNatural = String(formData.get('audioNatural') ?? '').trim() || null
   if (!amharic || !english) return { ok: false, error: 'Amharic and English are required' }
 
   const db = await createAdminDb()
@@ -655,6 +658,9 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
       english,
       level_id: levelId,
       transliteration,
+      audio_slow_path: audioSlow,
+      audio_normal_path: audioNormal,
+      audio_natural_path: audioNatural,
     })
     .select('id')
     .single()

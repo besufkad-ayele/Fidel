@@ -23,6 +23,11 @@ export type VocabItem = {
   amharic: string
   english: string
   transliteration: string | null
+  exampleAmharic?: string | null
+  exampleEnglish?: string | null
+  audioSlow?: string | null
+  audioNormal?: string | null
+  audioNatural?: string | null
 }
 
 const PART_ROUTE: Record<string, LessonPartKey> = {
@@ -102,18 +107,34 @@ export async function getVocabularyByIds(ids: string[]): Promise<VocabItem[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('vocabulary_items')
-    .select('id, amharic, english, transliteration')
+    .select(
+      'id, amharic, english, transliteration, example_amharic, example_english, audio_slow_path, audio_normal_path, audio_natural_path',
+    )
     .in('id', ids)
 
   if (error) throw new Error(error.message)
-  return (data ?? []) as VocabItem[]
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    amharic: row.amharic,
+    english: row.english,
+    transliteration: row.transliteration,
+    exampleAmharic: row.example_amharic,
+    exampleEnglish: row.example_english,
+    audioSlow: row.audio_slow_path,
+    audioNormal: row.audio_normal_path,
+    audioNatural: row.audio_natural_path,
+  }))
 }
 
 /** Collect vocabulary IDs referenced by content blocks. */
 export function collectVocabularyIds(content: LessonPartContent): string[] {
   const ids = new Set<string>()
   for (const block of content.blocks) {
-    if (block.type === 'vocabulary_set' || block.type === 'flashcard_revision') {
+    if (
+      block.type === 'vocabulary_set' ||
+      block.type === 'flashcard_revision' ||
+      block.type === 'listening_practice'
+    ) {
       for (const id of block.vocabularyIds) ids.add(id)
     }
   }

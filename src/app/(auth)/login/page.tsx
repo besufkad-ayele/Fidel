@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { LoginForm } from '@/components/features/auth/login-form'
-import { AmharicText } from '@/components/shared/amharic-text'
+import { BrandLogo } from '@/components/shared/brand-logo'
+import { routes } from '@/lib/auth/routes'
 
 export const metadata: Metadata = {
   title: 'Sign in',
@@ -18,9 +20,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <div>
       <div className="mb-8 lg:hidden">
-        <AmharicText size="xl" className="text-gold-500">
-          ፊደል
-        </AmharicText>
+        <Link href={routes.home} aria-label="Back to Fidel home">
+          <BrandLogo size={56} priority />
+        </Link>
       </div>
       <h1 className="font-display text-3xl text-green-700">{t('title')}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{t('subtitle')}</p>

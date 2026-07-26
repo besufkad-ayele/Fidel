@@ -47,9 +47,9 @@ export function MarketingHeader() {
             : 'border-cream-50/50 bg-cream-50/55 shadow-card backdrop-blur-lg',
         )}
       >
-        <div className="flex h-16 items-center justify-between gap-3 px-3 sm:h-[4.5rem] sm:px-5">
+        <div className="flex h-20 items-center justify-between gap-3 px-3 sm:h-24 sm:px-5">
           <Link href={routes.home} className="shrink-0" aria-label="Fidel home">
-            <BrandLogo size={52} priority />
+            <BrandLogo size={68} priority />
           </Link>
 
           <div className="hidden items-center gap-1 text-sm font-medium text-green-700/75 md:flex">

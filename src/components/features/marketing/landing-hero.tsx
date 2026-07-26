@@ -106,7 +106,7 @@ export function LandingHero() {
           >
             <div className="img-card-fallback relative aspect-[4/3] overflow-hidden rounded-xl">
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-6">
-                <BrandLogo size={140} showWordmark={false} priority />
+                <BrandLogo size={220} showWordmark={false} priority />
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   {LEVELS.map((level) => (
                     <span

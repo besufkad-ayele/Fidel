@@ -49,7 +49,9 @@ export default async function PartEditorPage({ params }: Props) {
     db.from('lesson_parts').select('*').eq('unit_id', id).eq('part', partKey).maybeSingle(),
     db
       .from('vocabulary_items')
-      .select('id, amharic, english, transliteration')
+      .select(
+        'id, amharic, english, transliteration, example_amharic, example_english, audio_slow_path, audio_normal_path, audio_natural_path',
+      )
       .eq('level_id', unit.level_id)
       .order('amharic')
       .limit(200),
@@ -84,11 +86,21 @@ export default async function PartEditorPage({ params }: Props) {
               amharic: string
               english: string
               transliteration: string | null
+              example_amharic?: string | null
+              example_english?: string | null
+              audio_slow_path?: string | null
+              audio_normal_path?: string | null
+              audio_natural_path?: string | null
             }) => ({
               id: v.id,
               amharic: v.amharic,
               english: v.english,
               transliteration: v.transliteration,
+              exampleAmharic: v.example_amharic ?? null,
+              exampleEnglish: v.example_english ?? null,
+              audioSlow: v.audio_slow_path ?? null,
+              audioNormal: v.audio_normal_path ?? null,
+              audioNatural: v.audio_natural_path ?? null,
             }),
           )}
         />

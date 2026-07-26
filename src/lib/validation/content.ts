@@ -27,6 +27,7 @@ export const contentBlockTypeSchema = z.enum([
   'vocabulary_set',
   'comprehension_check',
   'flashcard_revision',
+  'listening_practice',
   'matching_cards',
   'multiple_choice',
   'speaking_task',
@@ -162,6 +163,27 @@ export const flashcardRevisionBlockSchema = blockBase.extend({
         front: z.string(),
         back: z.string(),
         hint: z.string().optional(),
+        audioUrl: optionalUrl,
+      }),
+    )
+    .default([]),
+})
+
+export const listeningPracticeBlockSchema = blockBase.extend({
+  type: z.literal('listening_practice'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Prefer linking vocabulary that has recordings; custom items fill gaps. */
+  vocabularyIds: z.array(z.string().uuid()).default([]),
+  items: z
+    .array(
+      z.object({
+        audioUrl: optionalUrl,
+        speakText: z.string().optional(),
+        options: z.array(z.string()).min(2),
+        correctIndex: z.number().int().min(0),
+        revealAmharic: z.string().optional(),
+        revealEnglish: z.string().optional(),
       }),
     )
     .default([]),
@@ -239,6 +261,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   vocabularySetBlockSchema,
   comprehensionCheckBlockSchema,
   flashcardRevisionBlockSchema,
+  listeningPracticeBlockSchema,
   matchingCardsBlockSchema,
   multipleChoiceBlockSchema,
   speakingTaskBlockSchema,
@@ -462,6 +485,7 @@ export const BLOCK_CATALOG: {
   { type: 'dialogue', label: 'Dialogue', description: 'Multi-line conversation', parts: ['language_lesson'] },
   { type: 'vocabulary_set', label: 'Vocabulary set', description: 'Linked flashcard words', parts: ['language_lesson', 'practice'] },
   { type: 'flashcard_revision', label: 'Flashcards', description: 'Revision deck', parts: ['practice', 'language_lesson'] },
+  { type: 'listening_practice', label: 'Listening practice', description: 'Hear audio and choose the meaning', parts: ['language_lesson', 'practice'] },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: ['practice'] },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: ['practice'] },
   { type: 'speaking_task', label: 'Speaking task', description: 'Timed voice recording', parts: ['practice'] },
@@ -512,7 +536,25 @@ export function createBlock(type: ContentBlockType): ContentBlock {
         correctIndex: 0,
       }
     case 'flashcard_revision':
-      return { id, type, title: 'Flashcards', vocabularyIds: [], cards: [{ front: '', back: '' }] }
+      return { id, type, title: 'Flashcards', vocabularyIds: [], cards: [{ front: '', back: '', audioUrl: '' }] }
+    case 'listening_practice':
+      return {
+        id,
+        type,
+        title: 'Listening practice',
+        prompt: 'Listen carefully, then choose what you heard.',
+        vocabularyIds: [],
+        items: [
+          {
+            audioUrl: '',
+            speakText: 'ሰላም',
+            options: ['Hello', 'Goodbye', 'Thank you'],
+            correctIndex: 0,
+            revealAmharic: 'ሰላም',
+            revealEnglish: 'Hello / peace',
+          },
+        ],
+      }
     case 'matching_cards':
       return { id, type, prompt: '', pairs: [{ left: '', right: '' }] }
     case 'multiple_choice':

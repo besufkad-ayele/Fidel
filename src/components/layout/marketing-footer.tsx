@@ -12,7 +12,7 @@ export async function MarketingFooter() {
     <footer className="border-t border-cream-300/80 bg-cream-100">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-8 sm:flex-row sm:justify-between sm:px-6">
         <Link href={routes.home} aria-label="Fidel home">
-          <BrandLogo size={64} />
+          <BrandLogo size={104} />
         </Link>
         <p className="text-center text-sm text-green-700/55 sm:text-right">
           © {year} {BRAND.name}. {t('rights')}

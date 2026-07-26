@@ -1,9 +1,13 @@
+'use client'
+
 import { AmharicText } from '@/components/shared/amharic-text'
+import { AudioPlaybackProvider, AudioPlayer } from '@/components/shared/audio-player'
 import type { ContentBlock, LessonPartContent } from '@/lib/validation/content'
 import { cn } from '@/lib/utils'
 import { InteractiveMultipleChoice } from '@/components/content/interactive/multiple-choice'
 import { InteractiveMatching } from '@/components/content/interactive/matching'
 import { InteractiveFlashcards } from '@/components/content/interactive/flashcards'
+import { ListeningPractice } from '@/components/content/interactive/listening-practice'
 import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
 import { ComprehensionCheck } from '@/components/content/interactive/comprehension-check'
 
@@ -14,13 +18,17 @@ export type VocabLookup = Record<
     amharic: string
     english: string
     transliteration: string | null
+    exampleAmharic?: string | null
+    exampleEnglish?: string | null
+    audioSlow?: string | null
+    audioNormal?: string | null
+    audioNatural?: string | null
   }
 >
 
 type BlockRendererProps = {
   content: LessonPartContent
   vocabulary?: VocabLookup
-  /** Preview hides answer keys / disables submission side-effects */
   mode?: 'student' | 'preview'
   className?: string
 }
@@ -58,6 +66,14 @@ function MarkdownBody({ text }: { text: string }) {
       })}
     </div>
   )
+}
+
+function vocabAudio(w: VocabLookup[string]) {
+  return {
+    slow: w.audioSlow,
+    normal: w.audioNormal,
+    natural: w.audioNatural,
+  }
 }
 
 function renderBlock(
@@ -123,15 +139,13 @@ function renderBlock(
         </div>
       )
     case 'audio':
-      return block.url ? (
-        <div className="rounded-xl border border-cream-300 bg-cream-50 p-4">
-          {block.label ? <p className="mb-2 text-sm font-medium text-green-900">{block.label}</p> : null}
-          <audio controls src={block.url} className="w-full" />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-cream-400 bg-cream-100 px-4 py-6 text-center text-sm text-green-600">
-          Audio placeholder
-        </div>
+      return (
+        <AudioPlayer
+          variant="full"
+          label={block.label || 'Listen'}
+          showSpeed
+          sources={{ url: block.url || null }}
+        />
       )
     case 'callout': {
       const tones = {
@@ -263,30 +277,54 @@ function renderBlock(
         <div className="space-y-3 rounded-xl border border-cream-300 bg-cream-50 p-4">
           <p className="font-display text-lg text-green-900">{block.title || 'Dialogue'}</p>
           <div className="space-y-3">
-            {block.lines.map((line, i) => (
-              <div key={i} className="rounded-lg bg-white/70 p-3 ring-1 ring-cream-300">
-                <p className="mb-1 text-[11px] font-semibold tracking-wide text-gold-700 uppercase">
-                  {line.speaker}
-                </p>
-                <AmharicText size="lg" className="block text-green-950">
-                  {line.amharic}
-                </AmharicText>
-                {line.transliteration ? (
-                  <p className="mt-0.5 text-sm italic text-green-600">{line.transliteration}</p>
-                ) : null}
-                {line.english ? <p className="mt-1 text-sm text-green-800">{line.english}</p> : null}
-                {line.audioUrl ? <audio controls src={line.audioUrl} className="mt-2 w-full" /> : null}
-              </div>
-            ))}
+            {block.lines.map((line, i) => {
+              const initial = (line.speaker || '?').slice(0, 1).toUpperCase()
+              const tone = i % 2 === 0 ? 'bg-green-700' : 'bg-gold-600'
+              return (
+                <div
+                  key={i}
+                  className="flex gap-3 rounded-lg bg-white/70 p-3 ring-1 ring-cream-300"
+                >
+                  <div
+                    className={cn(
+                      'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-cream-50',
+                      tone,
+                    )}
+                  >
+                    {initial}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold tracking-wide text-gold-700 uppercase">
+                        {line.speaker}
+                      </p>
+                      <AudioPlayer
+                        variant="icon"
+                        sources={{ url: line.audioUrl || null }}
+                        speakText={line.amharic || undefined}
+                        label={`Play line by ${line.speaker}`}
+                      />
+                    </div>
+                    <AmharicText size="lg" className="block text-green-950">
+                      {line.amharic}
+                    </AmharicText>
+                    {line.transliteration ? (
+                      <p className="mt-0.5 text-sm italic text-green-600">{line.transliteration}</p>
+                    ) : null}
+                    {line.english ? (
+                      <p className="mt-1 text-sm text-green-800">{line.english}</p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )
     case 'vocabulary_set': {
-      const words = block.vocabularyIds
-        .map((id) => vocabulary[id])
-        .filter(Boolean)
+      const words = block.vocabularyIds.map((id) => vocabulary[id]).filter(Boolean)
       return (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
             {block.title || 'Vocabulary'}
           </p>
@@ -297,25 +335,53 @@ function renderBlock(
               {words.map((w) => (
                 <div
                   key={w.id}
-                  className="rounded-xl border border-cream-300 bg-cream-50 p-4 shadow-card"
+                  className="rounded-xl border border-cream-300 bg-cream-50 p-4 shadow-card transition hover:shadow-card-hover"
                 >
-                  <AmharicText size="xl" className="block text-green-950">
-                    {w.amharic}
-                  </AmharicText>
-                  {w.transliteration ? (
-                    <p className="mt-1 text-sm italic text-green-600">{w.transliteration}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <AmharicText size="xl" className="block text-gold-700">
+                        {w.amharic}
+                      </AmharicText>
+                      {w.transliteration ? (
+                        <p className="mt-0.5 text-sm italic text-green-600">{w.transliteration}</p>
+                      ) : null}
+                    </div>
+                    <AudioPlayer
+                      variant="icon"
+                      showSpeed
+                      sources={vocabAudio(w)}
+                      speakText={w.amharic}
+                      label={`Listen to ${w.transliteration || w.amharic}`}
+                    />
+                  </div>
+                  <div className="my-3 border-t border-cream-200" />
+                  <p className="text-sm font-semibold text-green-900">{w.english}</p>
+                  {w.exampleAmharic ? (
+                    <div className="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-xs ring-1 ring-cream-300">
+                      <AmharicText size="sm" className="block">
+                        {w.exampleAmharic}
+                      </AmharicText>
+                      {w.exampleEnglish ? (
+                        <p className="mt-0.5 text-green-600">{w.exampleEnglish}</p>
+                      ) : null}
+                    </div>
                   ) : null}
-                  <p className="mt-1 text-sm font-medium text-green-900">{w.english}</p>
                 </div>
               ))}
             </div>
           )}
           {block.showFlashcards && words.length > 0 ? (
             <InteractiveFlashcards
+              title="Study these words"
               cards={words.map((w) => ({
                 id: w.id,
                 front: w.amharic,
-                back: [w.transliteration, w.english].filter(Boolean).join(' — '),
+                back: w.english,
+                transliteration: w.transliteration ?? undefined,
+                english: w.english,
+                exampleAm: w.exampleAmharic ?? undefined,
+                exampleEn: w.exampleEnglish ?? undefined,
+                audio: vocabAudio(w),
               }))}
               mode={mode}
             />
@@ -332,7 +398,12 @@ function renderBlock(
         .map((w) => ({
           id: w.id,
           front: w.amharic,
-          back: [w.transliteration, w.english].filter(Boolean).join(' — '),
+          back: w.english,
+          transliteration: w.transliteration ?? undefined,
+          english: w.english,
+          exampleAm: w.exampleAmharic ?? undefined,
+          exampleEn: w.exampleEnglish ?? undefined,
+          audio: vocabAudio(w),
         }))
       const custom = block.cards
         .filter((c) => c.front || c.back)
@@ -340,11 +411,62 @@ function renderBlock(
           id: `custom-${i}`,
           front: c.front,
           back: c.hint ? `${c.back} (${c.hint})` : c.back,
+          english: c.back,
+          audio: c.audioUrl ? { url: c.audioUrl } : undefined,
         }))
       return (
         <InteractiveFlashcards
           title={block.title}
           cards={[...fromVocab, ...custom]}
+          mode={mode}
+        />
+      )
+    }
+    case 'listening_practice': {
+      const fromVocab = block.vocabularyIds
+        .map((id) => vocabulary[id])
+        .filter(Boolean)
+        .map((w, i, arr) => {
+          const distractors = arr
+            .filter((x) => x.id !== w.id)
+            .slice(0, 2)
+            .map((x) => x.english)
+          while (distractors.length < 2) distractors.push(`Option ${distractors.length + 2}`)
+          const options = [w.english, ...distractors]
+          return {
+            id: w.id,
+            audio: vocabAudio(w),
+            speakText: w.amharic,
+            options,
+            correctIndex: 0,
+            revealAmharic: w.amharic,
+            revealEnglish: w.english,
+          }
+        })
+      const custom = block.items
+        .filter((item) => item.options.length >= 2)
+        .map((item, i) => ({
+          id: `listen-${i}`,
+          audio: { url: item.audioUrl || null },
+          speakText: item.speakText,
+          options: item.options,
+          correctIndex: item.correctIndex,
+          revealAmharic: item.revealAmharic,
+          revealEnglish: item.revealEnglish,
+        }))
+      return (
+        <ListeningPractice
+          title={block.title}
+          items={[
+            ...fromVocab.map((item) => ({
+              ...item,
+              prompt: block.prompt,
+            })),
+            ...custom.map((item) => ({
+              ...item,
+              prompt: block.prompt,
+            })),
+          ]}
           mode={mode}
         />
       )
@@ -427,32 +549,34 @@ export function BlockRenderer({
   className,
 }: BlockRendererProps) {
   return (
-    <article className={cn('space-y-6', className)}>
-      {content.part === 'cultural_insight' && content.hookQuestion ? (
-        <div className="rounded-xl border border-gold-300 bg-gold-50 p-4">
-          <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
-            Think about this
-          </p>
-          <p className="mt-1 font-display text-lg text-green-900">{content.hookQuestion}</p>
-        </div>
-      ) : null}
+    <AudioPlaybackProvider>
+      <article className={cn('space-y-6', className)}>
+        {content.part === 'cultural_insight' && content.hookQuestion ? (
+          <div className="rounded-xl border border-gold-300 bg-gold-50 p-4">
+            <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+              Think about this
+            </p>
+            <p className="mt-1 font-display text-lg text-green-900">{content.hookQuestion}</p>
+          </div>
+        ) : null}
 
-      {content.title ? (
-        <header>
-          <span className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
-            {content.part === 'cultural_insight'
-              ? 'Cultural Insight'
-              : content.part === 'language_lesson'
-                ? 'Language Lesson'
-                : 'Practice'}
-          </span>
-          <h1 className="mt-1 font-display text-3xl text-green-900">{content.title}</h1>
-        </header>
-      ) : null}
+        {content.title ? (
+          <header>
+            <span className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+              {content.part === 'cultural_insight'
+                ? 'Cultural Insight'
+                : content.part === 'language_lesson'
+                  ? 'Language Lesson'
+                  : 'Practice'}
+            </span>
+            <h1 className="mt-1 font-display text-3xl text-green-900">{content.title}</h1>
+          </header>
+        ) : null}
 
-      {content.blocks.map((block) => (
-        <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
-      ))}
-    </article>
+        {content.blocks.map((block) => (
+          <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
+        ))}
+      </article>
+    </AudioPlaybackProvider>
   )
 }

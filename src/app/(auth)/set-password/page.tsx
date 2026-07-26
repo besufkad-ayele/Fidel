@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import { SetPasswordForm } from '@/components/features/auth/set-password-form'
-import { AmharicText } from '@/components/shared/amharic-text'
+import { BrandLogo } from '@/components/shared/brand-logo'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { routes } from '@/lib/auth/routes'
@@ -20,9 +20,9 @@ export default async function SetPasswordPage() {
   return (
     <div>
       <div className="mb-8 lg:hidden">
-        <AmharicText size="xl" className="text-gold-500">
-          ፊደል
-        </AmharicText>
+        <Link href={routes.home} aria-label="Back to Fidel home">
+          <BrandLogo size={56} priority />
+        </Link>
       </div>
       <h1 className="font-display text-3xl text-green-700">{t('title')}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{t('subtitle')}</p>

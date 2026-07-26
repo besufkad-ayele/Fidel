@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -30,6 +29,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { BrandLogo } from '@/components/shared/brand-logo'
 import { initialsFromName } from '@/lib/admin/nav'
 import { cn } from '@/lib/utils'
 import type { CurrentProfile } from '@/lib/auth/session'
@@ -94,20 +94,13 @@ function BrandMark({
 }) {
   return (
     <Link href={href as '/'} className="flex items-center gap-3">
-      <Image
-        src="/icons/Fidel_logo.png"
-        alt="Fidel"
-        width={compact ? 40 : 44}
-        height={compact ? 40 : 44}
-        className="object-contain"
-        priority
-      />
+      <BrandLogo size={compact ? 52 : 68} showWordmark={false} priority />
       <div className="min-w-0 leading-tight">
         <p
           className={
             onDark
-              ? 'font-display text-lg tracking-tight text-cream-50'
-              : 'font-display text-lg tracking-tight text-green-700'
+              ? 'font-display text-xl tracking-tight text-cream-50'
+              : 'font-display text-xl tracking-tight text-green-700'
           }
         >
           Fidel
@@ -282,14 +275,8 @@ export function AppShell({ profile, nav, children, brandHref, roleLabel }: AppSh
             </SheetContent>
           </Sheet>
           <div className="flex min-w-0 items-center gap-2">
-            <Image
-              src="/icons/Fidel_logo.png"
-              alt="Fidel"
-              width={32}
-              height={32}
-              className="shrink-0 object-contain"
-            />
-            <span className="truncate font-display text-lg text-green-700">Fidel</span>
+            <BrandLogo size={48} showWordmark={false} />
+            <span className="truncate font-display text-xl text-green-700">Fidel</span>
           </div>
         </header>
 

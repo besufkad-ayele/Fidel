@@ -1,9 +1,9 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { Menu, LogOut } from 'lucide-react'
 import { AdminNav } from '@/components/admin/admin-nav'
+import { BrandLogo } from '@/components/shared/brand-logo'
 import { adminNavGroups, initialsFromName } from '@/lib/admin/nav'
 import { routes } from '@/lib/auth/routes'
 import type { CurrentProfile } from '@/lib/auth/session'
@@ -32,20 +32,13 @@ function BrandMark({
 }) {
   return (
     <Link href={routes.admin} className="flex items-center gap-3">
-      <Image
-        src="/brand/fidel-mark.png"
-        alt="Fidel"
-        width={compact ? 36 : 40}
-        height={compact ? 36 : 40}
-        className="rounded-full ring-1 ring-gold-500/40"
-        priority
-      />
+      <BrandLogo size={compact ? 52 : 68} showWordmark={false} priority />
       <div className="min-w-0 leading-tight">
         <p
           className={
             onDark
-              ? 'font-display text-lg tracking-tight text-cream-50'
-              : 'font-display text-lg tracking-tight text-green-700'
+              ? 'font-display text-xl tracking-tight text-cream-50'
+              : 'font-display text-xl tracking-tight text-green-700'
           }
         >
           Fidel
