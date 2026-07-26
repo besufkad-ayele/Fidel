@@ -1,0 +1,274 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Fonts */
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-dm-serif), Georgia, serif;
+  --font-ethiopic: var(--font-noto-ethiopic), "Nyala", sans-serif;
+
+  /* Brand ramps */
+  --color-green-50: #f2f6f5;
+  --color-green-100: #dde8e6;
+  --color-green-200: #bbd0cd;
+  --color-green-300: #8fb0ac;
+  --color-green-400: #5f8783;
+  --color-green-500: #3d6360;
+  --color-green-600: #2a4a48;
+  --color-green-700: #1a3636;
+  --color-green-800: #142a2a;
+  --color-green-900: #0f2020;
+  --color-green-950: #0d1313;
+
+  --color-gold-50: #fdf9f0;
+  --color-gold-100: #faf0da;
+  --color-gold-200: #f3dfb2;
+  --color-gold-300: #eacb86;
+  --color-gold-400: #e0ba6f;
+  --color-gold-500: #d6ad60;
+  --color-gold-600: #be9345;
+  --color-gold-700: #9c7635;
+  --color-gold-800: #74572a;
+  --color-gold-900: #4e3b1e;
+
+  --color-cream-50: #fefdfb;
+  --color-cream-100: #f9f7f2;
+  --color-cream-200: #f1ede3;
+  --color-cream-300: #e5dfd1;
+  --color-cream-400: #d3cbb8;
+
+  --color-success-50: #eaf5ef;
+  --color-success-500: #2f7d5d;
+  --color-warning-50: #fdf4e5;
+  --color-warning-500: #c8871f;
+  --color-danger-50: #fbeceb;
+  --color-danger-500: #b23a34;
+  --color-info-50: #eaf2f7;
+  --color-info-500: #2f6d8f;
+
+  /* shadcn bridges */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --shadow-card:
+    0 1px 2px rgb(26 54 54 / 0.04), 0 1px 3px rgb(26 54 54 / 0.06);
+  --shadow-card-hover: 0 4px 12px rgb(26 54 54 / 0.1);
+  --shadow-overlay: 0 12px 32px rgb(26 54 54 / 0.16);
+  --shadow-modal: 0 24px 64px rgb(26 54 54 / 0.24);
+  --shadow-inset-gold: inset 0 0 0 1px #d6ad60;
+
+  --ease-brand: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-flip: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Amharic scale — every step ~10% larger than its Latin sibling, min 1.45 line-height.
+     Consumed by <AmharicText>; never hand-set Amharic sizes. */
+  --text-am-hero: 5rem;
+  --text-am-hero--line-height: 6rem;
+  --text-am-display: 3.5rem;
+  --text-am-display--line-height: 4.5rem;
+  --text-am-xl: 2.5rem;
+  --text-am-xl--line-height: 3.5rem;
+  --text-am-lg: 1.875rem;
+  --text-am-lg--line-height: 2.875rem;
+  --text-am-md: 1.5rem;
+  --text-am-md--line-height: 2.375rem;
+  --text-am-sm: 1.1875rem;
+  --text-am-sm--line-height: 1.875rem;
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #f9f7f2;
+  --foreground: #1a3636;
+  --card: #fefdfb;
+  --card-foreground: #1a3636;
+  --popover: #fefdfb;
+  --popover-foreground: #1a3636;
+  --primary: #1a3636;
+  --primary-foreground: #f9f7f2;
+  --secondary: #f1ede3;
+  --secondary-foreground: #1a3636;
+  --accent: #d6ad60;
+  --accent-foreground: #1a3636;
+  --muted: #f1ede3;
+  --muted-foreground: #5f8783;
+  --border: #e5dfd1;
+  --input: #e5dfd1;
+  --ring: #d6ad60;
+  --destructive: #b23a34;
+  --destructive-foreground: #fefdfb;
+
+  --sidebar: #1a3636;
+  --sidebar-foreground: #dde8e6;
+  --sidebar-accent: #2a4a48;
+  --sidebar-accent-foreground: #f9f7f2;
+  --sidebar-border: #2a4a48;
+  --sidebar-ring: #d6ad60;
+
+  /* Ethiopic optical compensation */
+  --ethiopic-scale: 1.1;
+}
+
+.dark {
+  --background: #0d1313;
+  --foreground: #f9f7f2;
+  --card: #142a2a;
+  --card-foreground: #f9f7f2;
+  --popover: #142a2a;
+  --popover-foreground: #f9f7f2;
+  --primary: #d6ad60;
+  --primary-foreground: #0d1313;
+  --secondary: #1a3636;
+  --secondary-foreground: #f9f7f2;
+  --accent: #d6ad60;
+  --accent-foreground: #0d1313;
+  --muted: #1a3636;
+  --muted-foreground: #8fb0ac;
+  --border: #2a4a48;
+  --input: #2a4a48;
+  --ring: #d6ad60;
+  --destructive: #b23a34;
+  --destructive-foreground: #fefdfb;
+
+  --sidebar: #0f2020;
+  --sidebar-foreground: #dde8e6;
+  --sidebar-accent: #1a3636;
+  --sidebar-accent-foreground: #f9f7f2;
+  --sidebar-border: #1a3636;
+  --sidebar-ring: #d6ad60;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-gold-500;
+  }
+}
+
+@layer utilities {
+  /* Overlay for every image-background card. Reused everywhere; never inline it. */
+  .img-card-overlay {
+    background: linear-gradient(
+      to top,
+      rgb(26 54 54 / 0.94) 0%,
+      rgb(26 54 54 / 0.72) 38%,
+      rgb(26 54 54 / 0.42) 72%,
+      rgb(26 54 54 / 0.28) 100%
+    );
+  }
+
+  /* Centered variant — radial, so centered text stays legible over busy photos. */
+  .img-card-overlay-center {
+    background: radial-gradient(
+      ellipse at center,
+      rgb(26 54 54 / 0.82) 0%,
+      rgb(26 54 54 / 0.62) 55%,
+      rgb(26 54 54 / 0.78) 100%
+    );
+  }
+
+  /* Shown when an ImageCard asset is missing, so a broken path never renders a void. */
+  .img-card-fallback {
+    background: linear-gradient(135deg, #1a3636 0%, #2a4a48 48%, #9c7635 100%);
+  }
+
+  .hero-gradient {
+    background: linear-gradient(
+      135deg,
+      #f9f7f2 0%,
+      rgb(214 173 96 / 0.07) 26%,
+      rgb(26 54 54 / 0.03) 54%,
+      #f9f7f2 100%
+    );
+  }
+
+  .dark .hero-gradient {
+    background: linear-gradient(
+      135deg,
+      #0d1313 0%,
+      rgb(214 173 96 / 0.06) 26%,
+      rgb(26 54 54 / 0.22) 54%,
+      #0d1313 100%
+    );
+  }
+
+  .fidel-char {
+    @apply font-ethiopic text-gold-500 leading-none;
+  }
+
+  /* Soft parchment atmosphere for admin / app canvases */
+  .admin-canvas {
+    background-color: #f9f7f2;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 0% -10%, rgb(214 173 96 / 0.12), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgb(26 54 54 / 0.05), transparent 50%),
+      linear-gradient(180deg, rgb(249 247 242 / 0) 0%, #f9f7f2 100%);
+  }
+
+  .admin-table-wrap {
+    @apply overflow-hidden rounded-xl border border-cream-300 bg-cream-50 shadow-card;
+  }
+
+  .admin-table-wrap table thead tr {
+    @apply border-b border-cream-300 bg-cream-200/60;
+  }
+
+  .admin-table-wrap table tbody tr {
+    @apply transition-colors hover:bg-green-50/60;
+  }
+
+  .admin-table-wrap table tbody tr:nth-child(even) {
+    @apply bg-cream-100/40;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

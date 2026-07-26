@@ -1,0 +1,399 @@
+{
+  "brand": {
+    "name": "Fidel",
+    "tagline": "Learn Amharic the way Ethiopia is actually spoken."
+  },
+  "common": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "loading": "Loading…",
+    "email": "Email",
+    "password": "Password",
+    "somethingWentWrong": "Something went wrong. Please try again.",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you are looking for does not exist or has moved.",
+    "goHome": "Go to homepage"
+  },
+  "marketing": {
+    "nav": {
+      "home": "Home",
+      "levels": "Levels",
+      "how": "How it works",
+      "services": "Services",
+      "about": "About",
+      "contact": "Contact",
+      "teachers": "Teachers",
+      "blog": "Blog",
+      "requestAccess": "Request access",
+      "login": "Log in"
+    },
+    "hero": {
+      "eyebrow": "Amharic for professionals in Ethiopia",
+      "titleLine1": "Learn.",
+      "titleLine2": "Amharic.",
+      "body": "Six levels, built for diplomats, NGO staff, researchers, and returning diaspora. Culture first, then language, then practice — with live sessions when you want a teacher.",
+      "primaryCta": "Request access",
+      "secondaryCta": "Explore the levels",
+      "socialProof": "Built for diplomats, NGO staff, researchers, and diaspora",
+      "badge": "Culture · Language · Practice"
+    },
+    "why": {
+      "eyebrow": "Reasons to join",
+      "title": "Why Learn With Us?",
+      "body": "Everything you need to speak Amharic with confidence — from your first greeting to advanced conversation.",
+      "scrollHint": "Scroll to explore",
+      "items": {
+        "nativeTeachers": {
+          "title": "Native teachers",
+          "body": "Learn from Amharic speakers who know how Ethiopia actually greets, negotiates, and hosts — not textbook phrases alone."
+        },
+        "personalized": {
+          "title": "Personalized lessons",
+          "body": "Your persona and progress shape every unit. Diplomats, NGO staff, and diaspora each get the framing that fits their work."
+        },
+        "flexible": {
+          "title": "Flexible scheduling",
+          "body": "Book live sessions around your calendar. Morning Addis, evening Toronto — times always show in your timezone."
+        },
+        "online": {
+          "title": "Online via Meet",
+          "body": "Join from Zoom or Google Meet with the same curriculum your teacher prepared from — no wasted minutes catching up."
+        },
+        "culture": {
+          "title": "Cultural immersion",
+          "body": "Every unit starts with culture: rank, hospitality, and when a phrase is right — then the language that belongs there."
+        },
+        "homework": {
+          "title": "Homework that sticks",
+          "body": "Practice after every lesson with speaking, writing, and real-world tasks your teacher can review."
+        },
+        "levels": {
+          "title": "Beginner to Advanced",
+          "body": "Six fidel levels from Foundations to Mastery, mapped to CEFR, with certificates embassies can verify."
+        }
+      }
+    },
+    "levels": {
+      "eyebrow": "The ladder",
+      "title": "Six fidel levels. One clear path.",
+      "body": "Named after the Ethiopian syllabary, not CEFR codes — with the CEFR equivalent printed on every certificate.",
+      "available": "Available now",
+      "comingSoon": "Coming soon",
+      "unlocked": "Unlocked"
+    },
+    "how": {
+      "eyebrow": "How it works",
+      "title": "One curriculum. Two ways to learn.",
+      "body": "Self-study and live teaching share the same path — so every minute with a teacher builds on what you already practiced.",
+      "selfTitle": "Study on your own",
+      "selfBody": "Open any unlocked unit. Culture, language, and practice — always available.",
+      "liveTitle": "Book a live teacher",
+      "liveBody": "Your teacher sees the same unit and what you already completed. No minute wasted.",
+      "certTitle": "Earn a recognized certificate",
+      "certBody": "Finish a level, pass the exam, get a PDF with a public verification code embassies can check."
+    },
+    "parts": {
+      "eyebrow": "Inside every unit",
+      "title": "Three parts. One clear rhythm.",
+      "body": "Every Fidel unit follows the same arc — so learners and teachers always know what comes next.",
+      "culture": {
+        "part": "Part 1",
+        "title": "Cultural Insight",
+        "body": "Understand the situation before the words — rank, distance, hospitality, and when a phrase is right.",
+        "point1": "Context cards for real Ethiopian settings",
+        "point2": "What to do, not just what to say",
+        "point3": "Sets up the vocabulary that follows"
+      },
+      "language": {
+        "part": "Part 2",
+        "title": "Language Lesson",
+        "body": "The phrases, patterns, and script work that belong in that situation — spoken Amharic first.",
+        "point1": "Target vocabulary with audio",
+        "point2": "Pattern drills that stick",
+        "point3": "Script support without slowing speech"
+      },
+      "practice": {
+        "part": "Part 3",
+        "title": "Practice",
+        "body": "Use what you learned — listening, speaking, and checks that prepare you for a live session.",
+        "point1": "Interactive exercises with instant feedback",
+        "point2": "Speaking prompts you can book a teacher for",
+        "point3": "Clear completion so teachers know your progress"
+      }
+    },
+    "hybrid": {
+      "titleLine1": "Structured learning",
+      "titleLine2": "at every step",
+      "body": "Every unit moves from culture to language to practice. Book a teacher when you want feedback — they already know where you left off.",
+      "feature1Title": "Culture before vocabulary",
+      "feature1Body": "Understand the situation first, then the words that belong in it.",
+      "feature2Title": "Live sessions that continue your path",
+      "feature2Body": "Teachers prepare from the same curriculum and your completed work.",
+      "feature3Title": "Certificates embassies can verify",
+      "feature3Body": "A public code on every PDF — no ambiguity for HR or protocol teams.",
+      "mockCultureLabel": "Culture",
+      "mockCulture": "Greetings carry rank, distance, and time of day — before any phrase list.",
+      "mockLesson": "selam — hello",
+      "mockReadyLabel": "Ready",
+      "mockReady": "Practice complete. Book a live session on this unit when you want coaching."
+    },
+    "cta": {
+      "title": "Ready to learn Amharic with purpose?",
+      "body": "Request access and an administrator will set up your Fidel account.",
+      "primary": "Request access",
+      "secondary": "Log in to dashboard"
+    },
+    "about": {
+      "eyebrow": "About Fidel",
+      "title": "Amharic for the work you actually do.",
+      "lead": "Fidel is built for people who need Amharic that works in offices, embassies, NGOs, research sites, and family visits — not tourist phrasebooks.",
+      "p1": "We organize learning into six fidel levels, named after the Ethiopian syllabary. Each level maps to a CEFR band so certificates stay readable for institutions abroad.",
+      "p2": "Every unit follows culture → language → practice. That rhythm keeps self-study honest and makes live teaching efficient — your teacher sees the same curriculum and what you already finished.",
+      "p3": "Accounts are provisioned by administrators. Request access, and we will set up your login when your organization is ready.",
+      "ctaTitle": "Join the next cohort",
+      "ctaBody": "Tell us who you are learning for — embassy, NGO, university, or yourself.",
+      "ctaPrimary": "Request access",
+      "ctaLogin": "Log in",
+      "ctaContact": "Contact us"
+    },
+    "services": {
+      "eyebrow": "Our services",
+      "title": "One curriculum. Three ways we serve you.",
+      "lead": "Whether you study alone, book a teacher, or need a certificate for protocol — Fidel keeps everything on the same path.",
+      "selfTitle": "Self-paced curriculum",
+      "selfBody": "Unlock units on your schedule. Culture, language, and practice are always available once entitled.",
+      "liveTitle": "Live teacher sessions",
+      "liveBody": "Book coaches who prepare from your progress. No wasted minutes re-teaching what you already practiced.",
+      "certTitle": "Verifiable certificates",
+      "certBody": "Finish a level, pass the exam, receive a PDF with a public code embassies and HR can verify.",
+      "ctaTitle": "Ready to start?",
+      "ctaBody": "Request access for yourself or your organization.",
+      "ctaPrimary": "Request access",
+      "ctaLogin": "Log in",
+      "ctaContact": "Talk to us"
+    },
+    "contact": {
+      "eyebrow": "Contact",
+      "title": "Let’s get you started.",
+      "lead": "Fidel accounts are created by an administrator. Request access, or email us if you represent an organization.",
+      "accessTitle": "Request access",
+      "accessBody": "Share your role and organization. We will provision your account and send login details.",
+      "accessCta": "Open request form",
+      "loginCta": "Log in instead",
+      "emailTitle": "Email the team",
+      "emailBody": "Questions about cohorts, pricing for organizations, or partnerships.",
+      "note": "Already invited? Use Log in from the navigation to activate your account."
+    },
+    "blog": {
+      "eyebrow": "From Fidel",
+      "title": "Blog",
+      "lead": "Culture notes, learning tips, and stories from teaching Amharic for real Ethiopian workplaces.",
+      "emptyTitle": "No posts yet",
+      "emptyBody": "Published articles will appear here. Check back soon.",
+      "readMore": "Read article",
+      "backToBlog": "Back to blog",
+      "references": "References",
+      "gallery": "Images",
+      "publishedOn": "Published {date}",
+      "tagsLabel": "Topics"
+    },
+    "footer": {
+      "description": "Six levels of Amharic for diplomats, NGO staff, researchers, and returning diaspora.",
+      "rights": "All rights reserved.",
+      "status": "Enrollment open"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to continue your Amharic journey.",
+      "emailLabel": "Email address",
+      "passwordLabel": "Password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "submit": "Sign in",
+      "forgot": "Forgot your password?",
+      "noAccountTitle": "Don't have an account?",
+      "noAccountBody": "Fidel accounts are created by your administrator. Request access and we will send your login details."
+    },
+    "errors": {
+      "invalidCredentials": "That email and password combination is not correct.",
+      "inactive": "This account has been deactivated. Contact your administrator.",
+      "noAccount": "No Fidel account exists for this email. Contact your administrator.",
+      "rateLimited": "Too many attempts. Please wait a moment and try again.",
+      "validation": "Please check the fields and try again."
+    },
+    "setPassword": {
+      "title": "Choose your password",
+      "subtitle": "Set a password to finish activating your Fidel account.",
+      "resetTitle": "Choose a new password",
+      "resetSubtitle": "Enter a new password for your Fidel account.",
+      "passwordLabel": "New password",
+      "confirmLabel": "Confirm password",
+      "submit": "Activate account",
+      "submitReset": "Save new password",
+      "hint": "At least 8 characters.",
+      "tooShort": "Password must be at least 8 characters.",
+      "mismatch": "Passwords do not match.",
+      "failed": "Could not save the password. Try again or request a new link.",
+      "noSession": "This link is missing or expired — there is no active session.",
+      "noSessionHint": "Open the link from your email again, or ask your administrator for a new one.",
+      "goLogin": "Back to sign in",
+      "requestNewLink": "Request a new reset link",
+      "signedInAs": "Setting password for"
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email and we will send a reset link if an account exists.",
+      "submit": "Send reset link",
+      "sent": "If an account exists for that email, a reset link is on its way."
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "levels": "My levels",
+    "vocabulary": "Vocabulary",
+    "sessions": "Live sessions",
+    "homework": "Homework",
+    "progress": "Progress",
+    "certificates": "Certificates",
+    "account": "Account",
+    "admin": "Admin",
+    "people": "People",
+    "organizations": "Organizations",
+    "payments": "Payments",
+    "today": "Today",
+    "schedule": "Schedule",
+    "students": "Students",
+    "availability": "Availability",
+    "settings": "Settings",
+    "learner": "Learn",
+    "teacher": "Teach"
+  },
+  "shell": {
+    "emptyStudent": "Your learning dashboard will appear here once content is connected.",
+    "emptyTeacher": "Your teaching workspace will appear here.",
+    "emptyAdmin": "Your admin console will appear here.",
+    "comingSoonTitle": "Coming soon",
+    "comingSoonBody": "This surface is next on the build list. Use the dashboard for now."
+  },
+  "dashboard": {
+    "eyebrow": "Your path",
+    "learner": "there",
+    "courseLabel": "Course: Amharic for Beginners (A1)",
+    "subtitle": "Continue where you left off — culture, language, then practice.",
+    "viewCertificate": "View certificate",
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    },
+    "hero": {
+      "eyebrow": "Level 1 active · CEFR {cefr}",
+      "body": "Master essential greetings, self-introductions, numbers, ordering food, and cultural etiquette in Ethiopia.",
+      "unitsComplete": "{done} of {total} units complete",
+      "minutes": "~45 min / lesson",
+      "cta": "Continue Unit 1",
+      "progressLabel": "Overall progress",
+      "percent": "{value}% completed"
+    },
+    "parts": {
+      "title": "Unit 1 structure"
+    },
+    "units": {
+      "title": "Level 1 unit track",
+      "active": "Unit 01 · Active",
+      "locked": "Locked",
+      "openUnit": "Open Unit 1"
+    },
+    "continue": {
+      "eyebrow": "Continue",
+      "title": "Begin {unit}",
+      "firstUnit": "Unit 1: Greetings",
+      "firstPart": "Cultural Insight",
+      "body": "Start {level} with {part} — culture first, then language, then practice.",
+      "cta": "Begin Unit 1",
+      "browse": "Browse levels",
+      "progressLabel": "Unit progress"
+    },
+    "session": {
+      "eyebrow": "Upcoming session",
+      "emptyTitle": "No session booked",
+      "emptyBody": "Book a live lesson when you want a teacher to coach what you already practiced.",
+      "cta": "Book your first session"
+    },
+    "nextUp": {
+      "eyebrow": "Next up",
+      "title": "{unit}",
+      "body": "Your first unit teaches greetings, rank, and how Ethiopians actually say hello.",
+      "link": "Open unit overview"
+    },
+    "attention": {
+      "eyebrow": "Needs your attention",
+      "title": "Stay on track",
+      "startTitle": "Start your first unit",
+      "startBody": "Open Foundations and work through culture, language, and practice.",
+      "homeworkTitle": "Homework inbox is clear",
+      "homeworkBody": "Assignments from your teacher will appear here when they are ready.",
+      "accessTitle": "Access is managed by your administrator",
+      "accessBody": "Levels and session credits come from your program coordinator."
+    },
+    "ladder": {
+      "eyebrow": "Curriculum",
+      "title": "The six fidel levels",
+      "viewAll": "My levels",
+      "available": "Available",
+      "comingSoon": "Coming soon"
+    }
+  },
+  "teach": {
+    "eyebrow": "Teaching desk",
+    "teacher": "there",
+    "dateLine": "{date} · {timezone}",
+    "viewSchedule": "Open schedule",
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    },
+    "stats": {
+      "today": "Sessions today",
+      "review": "Needs review",
+      "students": "Assigned students"
+    },
+    "sessions": {
+      "eyebrow": "Today",
+      "title": "Live sessions",
+      "week": "This week",
+      "emptyTitle": "No sessions today",
+      "emptyBody": "When students book you, each card will show pre-study status, Meet link, and prep — the whole point of the hybrid model.",
+      "ctaSchedule": "View schedule",
+      "ctaAvailability": "Set availability"
+    },
+    "review": {
+      "eyebrow": "Homework",
+      "title": "Needs review",
+      "empty": "Nothing waiting. Submissions from your students will queue here, oldest first.",
+      "cta": "Open review queue"
+    },
+    "week": {
+      "eyebrow": "Glance",
+      "title": "Next 7 days",
+      "free": "Open"
+    },
+    "shortcuts": {
+      "eyebrow": "Shortcuts",
+      "rosterTitle": "Student roster",
+      "rosterBody": "{count} students assigned to you",
+      "rosterEmpty": "No students assigned yet — check with your administrator",
+      "availabilityTitle": "Weekly availability",
+      "availabilityBody": "Keep your slots current so booking never surprises you",
+      "prepTitle": "Lesson prep & homework",
+      "prepBody": "Review submissions and open prep notes before you join"
+    }
+  }
+}
