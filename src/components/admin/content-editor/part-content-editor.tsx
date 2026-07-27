@@ -22,6 +22,7 @@ import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { upsertPartAction } from '@/app/(admin)/admin/content-actions'
 import { BlockRenderer } from '@/components/content/block-renderer'
+import { AdminAudioField } from '@/components/admin/admin-audio-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -179,15 +180,27 @@ function BlockFields({
     case 'audio':
       return (
         <>
-          <div>
-            <Label>URL</Label>
-            <Input
-              className="mt-1.5"
+          {block.type === 'audio' ? (
+            <AdminAudioField
+              name={`audio-${block.id}`}
+              label="Audio clip"
+              folder="lesson"
+              levelId="ha"
+              clipLabel="lesson"
               value={block.url ?? ''}
-              onChange={(e) => onChange({ ...block, url: e.target.value })}
-              placeholder={block.type === 'video' ? 'https://… or YouTube link' : 'https://…'}
+              onChange={(next) => onChange({ ...block, url: next })}
             />
-          </div>
+          ) : (
+            <div>
+              <Label>URL</Label>
+              <Input
+                className="mt-1.5"
+                value={block.url ?? ''}
+                onChange={(e) => onChange({ ...block, url: e.target.value })}
+                placeholder={block.type === 'video' ? 'https://… or YouTube link' : 'https://…'}
+              />
+            </div>
+          )}
           {'caption' in block ? (
             <div>
               <Label>Caption</Label>
@@ -492,12 +505,16 @@ function BlockFields({
                   onChange({ ...block, lines })
                 }}
               />
-              <Input
-                placeholder="Audio URL (optional)"
+              <AdminAudioField
+                name={`dialogue-audio-${block.id}-${i}`}
+                label="Line audio"
+                folder="dialogue"
+                levelId="ha"
+                clipLabel={`line-${line.speaker || i}`}
                 value={line.audioUrl ?? ''}
-                onChange={(e) => {
+                onChange={(next) => {
                   const lines = [...block.lines]
-                  lines[i] = { ...line, audioUrl: e.target.value }
+                  lines[i] = { ...line, audioUrl: next }
                   onChange({ ...block, lines })
                 }}
               />

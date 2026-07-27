@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/auth/guards'
 import { createAdminDb, writeAudit } from '@/lib/admin/db'
+import { revalidateCurriculum } from '@/lib/data/curriculum'
 import type { ActionResult } from '@/app/(admin)/admin/actions'
 import { lessonPartContentSchema, type LessonPartKey } from '@/lib/validation/content'
 
@@ -72,8 +73,10 @@ export async function updateLevelAction(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message)
 
   await audit('level.update', 'level', id, { title, status })
+  revalidateCurriculum()
   revalidatePath('/admin/levels')
   revalidatePath(`/admin/levels/${id}`)
+  revalidatePath(`/levels/${id}`)
 }
 
 export async function deleteLevelAction(levelId: string): Promise<void> {
@@ -93,7 +96,9 @@ export async function deleteLevelAction(levelId: string): Promise<void> {
   if (error) throw new Error(error.message)
 
   await audit('level.delete', 'level', levelId)
+  revalidateCurriculum()
   revalidatePath('/admin/levels')
+  revalidatePath('/levels')
   redirect('/admin/levels')
 }
 
@@ -144,7 +149,9 @@ export async function createUnitAction(formData: FormData): Promise<void> {
   ])
 
   await audit('unit.create', 'unit', id, { levelId, title })
+  revalidateCurriculum()
   revalidatePath(`/admin/levels/${levelId}`)
+  revalidatePath(`/levels/${levelId}`)
   redirect(`/admin/units/${id}`)
 }
 
@@ -183,8 +190,10 @@ export async function updateUnitAction(formData: FormData): Promise<void> {
   if (error) throw new Error(error.message)
 
   await audit('unit.update', 'unit', id, { title, status })
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${id}`)
   revalidatePath(`/admin/levels/${unit.level_id}`)
+  revalidatePath(`/levels/${unit.level_id}`)
 }
 
 export async function setUnitStatusAction(unitId: string, status: string): Promise<void> {
@@ -200,9 +209,14 @@ export async function setUnitStatusAction(unitId: string, status: string): Promi
   if (error) throw new Error(error.message)
 
   await audit(status === 'published' ? 'unit.publish' : 'unit.update', 'unit', unitId, { status })
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${unitId}`)
-  if (unit?.level_id) revalidatePath(`/admin/levels/${unit.level_id}`)
+  if (unit?.level_id) {
+    revalidatePath(`/admin/levels/${unit.level_id}`)
+    revalidatePath(`/levels/${unit.level_id}`)
+  }
   revalidatePath('/admin/levels')
+  revalidatePath('/levels')
 }
 
 export async function deleteUnitAction(unitId: string): Promise<void> {
@@ -215,8 +229,11 @@ export async function deleteUnitAction(unitId: string): Promise<void> {
   if (error) throw new Error(error.message)
 
   await audit('unit.delete', 'unit', unitId)
+  revalidateCurriculum()
   revalidatePath(`/admin/levels/${unit.level_id}`)
+  revalidatePath(`/levels/${unit.level_id}`)
   revalidatePath('/admin/levels')
+  revalidatePath('/levels')
   redirect(`/admin/levels/${unit.level_id}`)
 }
 
@@ -283,6 +300,7 @@ export async function upsertPartAction(formData: FormData): Promise<ActionResult
     await audit('part.create', 'lesson_part', created.id, { unitId, part, status })
   }
 
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${unitId}`)
   const slug =
     part === 'cultural_insight'
@@ -291,6 +309,7 @@ export async function upsertPartAction(formData: FormData): Promise<ActionResult
         ? 'language-lesson'
         : 'practice'
   revalidatePath(`/admin/units/${unitId}/parts/${slug}`)
+  revalidatePath('/levels')
   return { ok: true }
 }
 
@@ -336,7 +355,9 @@ export async function setPartStatusAction(
     await audit('part.create', 'lesson_part', created.id, { unitId, part, status })
   }
 
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${unitId}`)
+  revalidatePath('/levels')
 }
 
 export async function deletePartAction(unitId: string, part: string): Promise<void> {
@@ -357,6 +378,7 @@ export async function deletePartAction(unitId: string, part: string): Promise<vo
   if (error) throw new Error(error.message)
 
   await audit('part.delete', 'lesson_part', row.id, { unitId, part })
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${unitId}`)
   const slug =
     part === 'cultural_insight'
@@ -365,6 +387,7 @@ export async function deletePartAction(unitId: string, part: string): Promise<vo
         ? 'language-lesson'
         : 'practice'
   revalidatePath(`/admin/units/${unitId}/parts/${slug}`)
+  revalidatePath('/levels')
 }
 
 export async function resetPartContentAction(unitId: string, part: string): Promise<void> {
@@ -388,7 +411,9 @@ export async function resetPartContentAction(unitId: string, part: string): Prom
   if (error) throw new Error(error.message)
 
   await audit('part.reset', 'lesson_part', row.id, { unitId, part })
+  revalidateCurriculum()
   revalidatePath(`/admin/units/${unitId}`)
+  revalidatePath('/levels')
 }
 
 /* ─── Vocabulary ───────────────────────────────────────────────────── */
@@ -426,7 +451,10 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
   if (error) throw new Error(error.message)
 
   await audit('vocabulary.update', 'vocabulary_item', id, { amharic, english })
+  revalidateCurriculum()
   revalidatePath('/admin/vocabulary')
+  revalidatePath('/vocabulary')
+  revalidatePath('/levels')
 }
 
 export async function deleteVocabularyAction(id: string): Promise<void> {
@@ -436,7 +464,10 @@ export async function deleteVocabularyAction(id: string): Promise<void> {
   if (error) throw new Error(error.message)
 
   await audit('vocabulary.delete', 'vocabulary_item', id)
+  revalidateCurriculum()
   revalidatePath('/admin/vocabulary')
+  revalidatePath('/vocabulary')
+  revalidatePath('/levels')
 }
 
 /* ─── Blog ─────────────────────────────────────────────────────────── */

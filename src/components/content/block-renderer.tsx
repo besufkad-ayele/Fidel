@@ -2,6 +2,7 @@
 
 import { AmharicText } from '@/components/shared/amharic-text'
 import { AudioPlaybackProvider, AudioPlayer } from '@/components/shared/audio-player'
+import { lessonMediaPublicUrl, vocabAudioPublicUrl } from '@/lib/media/urls'
 import type { ContentBlock, LessonPartContent } from '@/lib/validation/content'
 import { cn } from '@/lib/utils'
 import { InteractiveMultipleChoice } from '@/components/content/interactive/multiple-choice'
@@ -70,9 +71,9 @@ function MarkdownBody({ text }: { text: string }) {
 
 function vocabAudio(w: VocabLookup[string]) {
   return {
-    slow: w.audioSlow,
-    normal: w.audioNormal,
-    natural: w.audioNatural,
+    slow: vocabAudioPublicUrl(w.audioSlow),
+    normal: vocabAudioPublicUrl(w.audioNormal),
+    natural: vocabAudioPublicUrl(w.audioNatural),
   }
 }
 
@@ -144,7 +145,7 @@ function renderBlock(
           variant="full"
           label={block.label || 'Listen'}
           showSpeed
-          sources={{ url: block.url || null }}
+          sources={{ url: lessonMediaPublicUrl(block.url) || block.url || null }}
         />
       )
     case 'callout': {
@@ -300,7 +301,7 @@ function renderBlock(
                       </p>
                       <AudioPlayer
                         variant="icon"
-                        sources={{ url: line.audioUrl || null }}
+                        sources={{ url: lessonMediaPublicUrl(line.audioUrl) || line.audioUrl || null }}
                         speakText={line.amharic || undefined}
                         label={`Play line by ${line.speaker}`}
                       />
@@ -412,7 +413,9 @@ function renderBlock(
           front: c.front,
           back: c.hint ? `${c.back} (${c.hint})` : c.back,
           english: c.back,
-          audio: c.audioUrl ? { url: c.audioUrl } : undefined,
+          audio: c.audioUrl
+            ? { url: lessonMediaPublicUrl(c.audioUrl) || c.audioUrl }
+            : undefined,
         }))
       return (
         <InteractiveFlashcards
@@ -447,7 +450,7 @@ function renderBlock(
         .filter((item) => item.options.length >= 2)
         .map((item, i) => ({
           id: `listen-${i}`,
-          audio: { url: item.audioUrl || null },
+          audio: { url: lessonMediaPublicUrl(item.audioUrl) || item.audioUrl || null },
           speakText: item.speakText,
           options: item.options,
           correctIndex: item.correctIndex,

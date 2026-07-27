@@ -5,6 +5,7 @@ import { AudioPlaybackProvider, AudioPlayer } from '@/components/shared/audio-pl
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/server'
+import { vocabAudioPublicUrl } from '@/lib/media/urls'
 
 export const metadata: Metadata = { title: 'Vocabulary' }
 
@@ -102,9 +103,9 @@ export default async function VocabularyPage({
                     variant="icon"
                     showSpeed
                     sources={{
-                      slow: item.audio_slow_path,
-                      normal: item.audio_normal_path,
-                      natural: item.audio_natural_path,
+                      slow: vocabAudioPublicUrl(item.audio_slow_path),
+                      normal: vocabAudioPublicUrl(item.audio_normal_path),
+                      natural: vocabAudioPublicUrl(item.audio_natural_path),
                     }}
                     speakText={item.amharic}
                     label={`Listen to ${item.transliteration || item.amharic}`}

@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidateCurriculum } from '@/lib/data/curriculum'
 import { requireRole } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createAdminDb, writeAudit } from '@/lib/admin/db'
@@ -575,7 +576,10 @@ export async function updateLevelStatusAction(levelId: string, status: string): 
     metadata: { status },
   })
 
+  revalidateCurriculum()
   revalidatePath('/admin/levels')
+  revalidatePath('/levels')
+  revalidatePath(`/levels/${levelId}`)
   return { ok: true }
 }
 
@@ -676,7 +680,10 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
     metadata: { amharic, english, levelId },
   })
 
+  revalidateCurriculum()
   revalidatePath('/admin/vocabulary')
+  revalidatePath('/vocabulary')
+  revalidatePath('/levels')
   return { ok: true, id: item.id }
 }
 

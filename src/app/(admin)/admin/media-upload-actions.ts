@@ -23,7 +23,7 @@ export async function uploadAdminAudioAction(formData: FormData): Promise<Upload
     const uploaded = await uploadAudioMedia(file, folder, { levelId, label })
 
     const db = await createAdminDb()
-    await db.from('media_assets').insert({
+    const { error: metaError } = await db.from('media_assets').insert({
       bucket: uploaded.bucket,
       storage_path: uploaded.path,
       kind: 'audio',
@@ -34,6 +34,9 @@ export async function uploadAdminAudioAction(formData: FormData): Promise<Upload
       uploaded_by: user.id,
       alt_text: label,
     })
+    if (metaError) {
+      console.error('[uploadAdminAudio] media_assets', metaError.message)
+    }
 
     await writeAudit({
       actorId: user.id,

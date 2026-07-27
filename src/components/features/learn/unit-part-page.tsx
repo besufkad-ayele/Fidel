@@ -4,13 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { BlockRenderer } from '@/components/content/block-renderer'
 import { PartTabs } from '@/components/features/learn/part-tabs'
 import { Button } from '@/components/ui/button'
-import {
-  collectVocabularyIds,
-  getPublishedPartContent,
-  getPublishedUnitBySlug,
-  getVocabularyByIds,
-  partKeyFromRoute,
-} from '@/lib/data/curriculum'
+import { getPublishedUnitPartPage, partKeyFromRoute } from '@/lib/data/curriculum'
 
 const NEXT_PART: Record<string, { label: string; route: string } | null> = {
   culture: { label: 'Continue to Language Lesson', route: 'lesson' },
@@ -30,10 +24,11 @@ export async function UnitPartPage({
   const partKey = partKeyFromRoute(partRoute)
   if (!partKey) notFound()
 
-  const unit = await getPublishedUnitBySlug(levelSlug, unitSlug)
-  if (!unit) notFound()
+  const page = await getPublishedUnitPartPage(levelSlug, unitSlug, partKey)
+  if (!page) notFound()
 
-  const content = await getPublishedPartContent(unit.id, partKey)
+  const { unit, content, vocabulary } = page
+
   if (!content) {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
@@ -47,10 +42,6 @@ export async function UnitPartPage({
       </div>
     )
   }
-
-  const vocabIds = collectVocabularyIds(content)
-  const vocabRows = await getVocabularyByIds(vocabIds)
-  const vocabulary = Object.fromEntries(vocabRows.map((v) => [v.id, v]))
 
   const next = NEXT_PART[partRoute]
 

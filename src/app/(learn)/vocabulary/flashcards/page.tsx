@@ -4,6 +4,7 @@ import { AmharicText } from '@/components/shared/amharic-text'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { FlashcardStudyClient } from './flashcard-study-client'
+import { vocabAudioPublicUrl } from '@/lib/media/urls'
 
 export const metadata: Metadata = { title: 'Flashcards' }
 
@@ -51,9 +52,9 @@ export default async function FlashcardsPage({
         transliteration: w.transliteration ?? undefined,
         english: w.english,
         audio: {
-          slow: w.audio_slow_path,
-          normal: w.audio_normal_path,
-          natural: w.audio_natural_path,
+          slow: vocabAudioPublicUrl(w.audio_slow_path),
+          normal: vocabAudioPublicUrl(w.audio_normal_path),
+          natural: vocabAudioPublicUrl(w.audio_natural_path),
         },
         difficultyWeight: w.difficulty_weight ?? 1,
         due,
