@@ -23,9 +23,60 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      <div className="flex items-center justify-center px-4 py-12 sm:px-8">
-        <div className="w-full max-w-[400px]">{children}</div>
+      <div className="relative flex items-center justify-center overflow-hidden bg-gradient-to-b from-cream-50 to-white px-4 py-10 sm:px-8">
+        <div className="relative z-10 w-full max-w-[460px] rounded-2xl border border-cream-300 bg-white/90 p-6 shadow-card backdrop-blur-sm sm:p-8">
+          <div className="mb-6 flex justify-center lg:mb-8">
+            <Link href={routes.home} aria-label="Back to Fidel home" className="group relative inline-flex">
+              <span className="auth-water-shape auth-water-shape-a" />
+              <span className="auth-water-shape auth-water-shape-b" />
+              <span className="auth-water-shape auth-water-shape-c" />
+              <span className="relative z-10 rounded-full bg-white/85 p-2 shadow-sm">
+                <BrandLogo size={78} showWordmark={false} priority />
+              </span>
+            </Link>
+          </div>
+          {children}
+        </div>
       </div>
+      <style>{`
+        @keyframes authFloatA {
+          0%, 100% { transform: translate(-12%, -8%) scale(1); }
+          50% { transform: translate(-8%, -18%) scale(1.06); }
+        }
+        @keyframes authFloatB {
+          0%, 100% { transform: translate(10%, 10%) scale(1); }
+          50% { transform: translate(14%, 2%) scale(1.08); }
+        }
+        @keyframes authFloatC {
+          0%, 100% { transform: translate(0%, 0%) scale(1); }
+          50% { transform: translate(-2%, 6%) scale(0.94); }
+        }
+        .auth-water-shape {
+          position: absolute;
+          border-radius: 9999px;
+          opacity: 0.55;
+          filter: blur(0.5px);
+        }
+        .auth-water-shape-a {
+          width: 108px;
+          height: 108px;
+          background: radial-gradient(circle at 30% 30%, #f8d489 0%, #d6ad60 62%, #be9345 100%);
+          animation: authFloatA 5.8s ease-in-out infinite;
+        }
+        .auth-water-shape-b {
+          width: 92px;
+          height: 92px;
+          background: radial-gradient(circle at 35% 30%, #b7dfdd 0%, #5f8783 68%, #2a4a48 100%);
+          animation: authFloatB 6.6s ease-in-out infinite;
+        }
+        .auth-water-shape-c {
+          width: 122px;
+          height: 122px;
+          background: radial-gradient(circle at 40% 28%, #fff6de 0%, #f3dfb2 72%, #e0ba6f 100%);
+          animation: authFloatC 7.4s ease-in-out infinite;
+          opacity: 0.42;
+        }
+      `}</style>
     </div>
   )
 }

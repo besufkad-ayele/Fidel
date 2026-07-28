@@ -1,8 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
 import { createStudentAction } from '@/app/(admin)/admin/actions'
 import { PERSONAS, LEVEL_OPTIONS, ORG_TYPES, TIMEZONES, PAYMENT_PROVIDERS } from '@/lib/admin/constants'
 import { Button } from '@/components/ui/button'
@@ -26,6 +28,7 @@ export function StudentForm({ organizations, teachers, units }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const errorRef = useRef<HTMLDivElement>(null)
   const [createdId, setCreatedId] = useState<string | null>(null)
   const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
@@ -35,6 +38,8 @@ export function StudentForm({ organizations, teachers, units }: Props) {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [adminNotes, setAdminNotes] = useState('')
   const [persona, setPersona] = useState('diplomat')
   const [studyIntent, setStudyIntent] = useState('steady')
@@ -53,7 +58,7 @@ export function StudentForm({ organizations, teachers, units }: Props) {
   const [levelIds, setLevelIds] = useState<string[]>(['ha'])
   const [unitIds, setUnitIds] = useState<string[]>([])
   const [accessSource, setAccessSource] = useState('admin_grant')
-  const [accessNote, setAccessNote] = useState('')
+  const [accessNote, setAccessNote] = useState('Admin grant')
   const [sessionCredits, setSessionCredits] = useState(0)
   const [expiresAt, setExpiresAt] = useState('')
   const [includePayment, setIncludePayment] = useState(false)
@@ -64,6 +69,18 @@ export function StudentForm({ organizations, teachers, units }: Props) {
   const [paymentRef, setPaymentRef] = useState('')
   const [teacherIds, setTeacherIds] = useState<string[]>([])
   const [primaryTeacherId, setPrimaryTeacherId] = useState('')
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [error])
+
+  function reportError(message: string) {
+    console.error('[StudentForm]', message)
+    setError(message)
+    toast.error(message)
+  }
 
   const summary = useMemo(() => {
     const lines = [
@@ -118,43 +135,86 @@ export function StudentForm({ organizations, teachers, units }: Props) {
     e.preventDefault()
     setError(null)
 
+    if (!fullName.trim()) {
+      reportError('Full name is required')
+      return
+    }
+    if (!email.trim()) {
+      reportError('Email is required')
+      return
+    }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+      reportError('Password must be at least 8 characters')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      reportError('Passwords do not match')
+      return
+    }
+    if (phone && !/^\+[1-9]\d{7,14}$/.test(phone)) {
+      reportError('Phone must be E.164 format, e.g. +251911234567')
+      return
+    }
+    if (grantAccess) {
+      if (scope === 'level' && levelIds.length === 0) {
+        reportError('Select at least one level to grant')
+        return
+      }
+      if (scope === 'unit' && unitIds.length === 0) {
+        reportError('Select at least one unit to grant')
+        return
+      }
+      if (!(accessNote.trim() || 'Admin grant')) {
+        reportError('Access grant note is required')
+        return
+      }
+    }
+    if (teacherIds.length > 0 && !primaryTeacherId) {
+      reportError('Choose which teacher is primary')
+      return
+    }
+    if ((includePayment || accessSource === 'purchase') && (!amount || Number(amount) <= 0)) {
+      reportError('Enter a payment amount greater than 0')
       return
     }
 
+    const selectedOrg = organizations.find((o) => o.id === organizationId)
+    type OrgType = (typeof ORG_TYPES)[number]['id']
+    const orgTypeIds = ORG_TYPES.map((t) => t.id) as OrgType[]
+    const resolvedOrgType: OrgType =
+      orgMode === 'existing'
+        ? orgTypeIds.includes((selectedOrg?.type ?? '') as OrgType)
+          ? (selectedOrg!.type as OrgType)
+          : 'other'
+        : (orgType as OrgType)
+
     startTransition(async () => {
       const payload = {
-        fullName,
-        preferredName: preferredName || undefined,
-        email,
-        phone: phone || undefined,
+        fullName: fullName.trim(),
+        preferredName: preferredName.trim() || undefined,
+        email: email.trim().toLowerCase(),
+        phone: phone.trim() || undefined,
         password,
         isActive: 'active' as const,
-        adminNotes: adminNotes || undefined,
+        adminNotes: adminNotes.trim() || undefined,
         persona,
         studyIntent,
-        learningGoal: learningGoal || undefined,
+        learningGoal: learningGoal.trim() || undefined,
         priorExperience,
         startingLevelId,
         organization:
           orgMode === 'existing' && organizationId
             ? {
                 id: organizationId,
-                name: organizations.find((o) => o.id === organizationId)?.name ?? 'Org',
-                type: (organizations.find((o) => o.id === organizationId)?.type ??
-                  'other') as 'other',
+                name: selectedOrg?.name ?? 'Org',
+                type: resolvedOrgType,
               }
-            : orgMode === 'new' && orgName
-              ? { name: orgName, type: orgType as 'embassy' }
+            : orgMode === 'new' && orgName.trim()
+              ? { name: orgName.trim(), type: orgType }
               : undefined,
-        jobTitle: jobTitle || undefined,
+        jobTitle: jobTitle.trim() || undefined,
         timezone,
-        country: country || undefined,
+        country: country.trim() || undefined,
         locale: 'en' as const,
         preferredDays: [] as number[],
         preferredTimes: [] as ('morning' | 'afternoon' | 'evening')[],
@@ -164,8 +224,8 @@ export function StudentForm({ organizations, teachers, units }: Props) {
               scope,
               levelIds,
               unitIds,
-              source: accessSource as 'admin_grant',
-              note: accessNote || 'Admin grant',
+              source: accessSource,
+              note: accessNote.trim() || 'Admin grant',
               sessionCredits,
               expiresAt: expiresAt ? new Date(expiresAt) : undefined,
             }
@@ -174,10 +234,10 @@ export function StudentForm({ organizations, teachers, units }: Props) {
           includePayment || accessSource === 'purchase'
             ? {
                 amount: Number(amount),
-                currency: currency as 'ETB',
-                provider: provider as 'manual_bank',
-                status: paymentStatus as 'paid',
-                reference: paymentRef || undefined,
+                currency,
+                provider,
+                status: paymentStatus,
+                reference: paymentRef.trim() || undefined,
                 paidAt: new Date(),
               }
             : undefined,
@@ -185,14 +245,20 @@ export function StudentForm({ organizations, teachers, units }: Props) {
         primaryTeacherId: primaryTeacherId || undefined,
       }
 
-      const result = await createStudentAction(payload)
-      if (!result.ok) {
-        setError(result.error ?? 'Failed')
-        return
+      try {
+        const result = await createStudentAction(payload)
+        if (!result.ok) {
+          reportError(result.error ?? 'Failed to create student')
+          return
+        }
+        toast.success('Student created')
+        setCreatedId(result.id ?? null)
+        setCreatedEmail(result.email ?? email)
+        router.refresh()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create student'
+        reportError(message)
       }
-      setCreatedId(result.id ?? null)
-      setCreatedEmail(result.email ?? email)
-      router.refresh()
     })
   }
 
@@ -226,7 +292,18 @@ export function StudentForm({ organizations, teachers, units }: Props) {
   return (
     <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[1fr_280px]">
       <div className="space-y-6">
-        <Section letter="A" title="Account" description="Login identity and invite delivery.">
+        {error ? (
+          <div
+            ref={errorRef}
+            role="alert"
+            className="rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-500"
+          >
+            <p className="font-medium">Could not create student</p>
+            <p className="mt-1">{error}</p>
+          </div>
+        ) : null}
+
+        <Section letter="A" title="Account" description="Login identity — student signs in immediately with this password.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Full name" required>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
@@ -242,7 +319,7 @@ export function StudentForm({ organizations, teachers, units }: Props) {
                 required
               />
             </Field>
-            <Field label="Phone (E.164)">
+            <Field label="Phone (E.164)" hint="Optional. Example: +251911234567">
               <Input
                 placeholder="+251911234567"
                 value={phone}
@@ -254,24 +331,46 @@ export function StudentForm({ organizations, teachers, units }: Props) {
               required
               hint="Student can sign in immediately — no email verification."
             >
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-green-700"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </Field>
             <Field label="Confirm password" required>
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-              />
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-green-700"
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </Field>
           </div>
           <Field label="Internal notes (staff only)" className="mt-4">
@@ -530,7 +629,7 @@ export function StudentForm({ organizations, teachers, units }: Props) {
                 </Field>
                 <Field label="Grant note" required>
                   <Input
-                    required
+                    required={grantAccess}
                     value={accessNote}
                     onChange={(e) => setAccessNote(e.target.value)}
                     placeholder="Why does this student have this access?"
@@ -611,12 +710,12 @@ export function StudentForm({ organizations, teachers, units }: Props) {
 
         <Section
           letter="G"
-          title="Teacher assignment"
-          description="Required for live bookings. Blank means self-paced only."
+          title="Temari assignment"
+          description="Assign a teacher for live bookings. Leave blank for self-paced only."
         >
           {teachers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No teachers yet. Create a teacher first, or leave blank for self-paced.
+              No teachers yet. Create a temari first, or leave blank for self-paced.
             </p>
           ) : (
             <div className="space-y-2">
@@ -646,9 +745,13 @@ export function StudentForm({ organizations, teachers, units }: Props) {
         </Section>
 
         {error ? (
-          <p className="rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-500">
-            {error}
-          </p>
+          <div
+            role="alert"
+            className="rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-500"
+          >
+            <p className="font-medium">Could not create student</p>
+            <p className="mt-1">{error}</p>
+          </div>
         ) : null}
 
         <div className="flex flex-wrap gap-2 pb-10">

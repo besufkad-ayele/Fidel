@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -18,11 +18,12 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { GripVertical, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { upsertPartAction } from '@/app/(admin)/admin/content-actions'
 import { BlockRenderer } from '@/components/content/block-renderer'
 import { AdminAudioField } from '@/components/admin/admin-audio-field'
+import { AdminImageField } from '@/components/admin/admin-image-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -464,6 +465,256 @@ function SortableBlock({
   )
 }
 
+type DialogueLine = Extract<ContentBlock, { type: 'dialogue' }>['lines'][number]
+
+function SortableDialogueLine({
+  id,
+  index,
+  total,
+  onMove,
+  onRemove,
+  children,
+}: {
+  id: string
+  index: number
+  total: number
+  onMove: (from: number, to: number) => void
+  onRemove: () => void
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={cn(
+        'space-y-2 rounded-lg border border-cream-200 bg-cream-50/40 p-3',
+        isDragging && 'opacity-80 ring-2 ring-gold-400',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide text-green-700 uppercase"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4 text-green-500" />
+          Line {index + 1}
+          <span className="font-normal normal-case text-muted-foreground">· drag to reorder</span>
+        </button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={index === 0}
+            aria-label="Move line up"
+            onClick={() => onMove(index, index - 1)}
+          >
+            <ChevronUp className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={index === total - 1}
+            aria-label="Move line down"
+            onClick={() => onMove(index, index + 1)}
+          >
+            <ChevronDown className="size-3.5" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" aria-label="Remove line" onClick={onRemove}>
+            <Trash2 className="size-3.5 text-danger-500" />
+          </Button>
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ensureDialogueLines(lines: DialogueLine[]): DialogueLine[] {
+  return lines.map((line) => ({
+    ...line,
+    id: line.id || crypto.randomUUID(),
+  }))
+}
+
+function DialogueLinesEditor({
+  block,
+  onChange,
+}: {
+  block: Extract<ContentBlock, { type: 'dialogue' }>
+  onChange: (next: ContentBlock) => void
+}) {
+  const lines = ensureDialogueLines(block.lines)
+  const lineSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  useEffect(() => {
+    const needsIds = block.lines.some((l) => !l.id)
+    if (!needsIds) return
+    onChange({ ...block, lines: ensureDialogueLines(block.lines) })
+  }, [block, onChange])
+
+  function setLines(next: DialogueLine[]) {
+    onChange({ ...block, lines: next })
+  }
+
+  function updateLine(index: number, patch: Partial<DialogueLine>) {
+    const next = [...lines]
+    next[index] = { ...next[index], ...patch }
+    setLines(next)
+  }
+
+  function moveLine(from: number, to: number) {
+    if (to < 0 || to >= lines.length) return
+    setLines(arrayMove(lines, from, to))
+  }
+
+  function onLineDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = lines.findIndex((l) => l.id === active.id)
+    const newIndex = lines.findIndex((l) => l.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    setLines(arrayMove(lines, oldIndex, newIndex))
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Title</Label>
+        <Input
+          className="mt-1.5"
+          value={block.title}
+          onChange={(e) => onChange({ ...block, title: e.target.value })}
+        />
+      </div>
+      <div>
+        <Label>Dialogue link (optional)</Label>
+        <Input
+          className="mt-1.5"
+          placeholder="https://… (video, Drive, transcript)"
+          value={block.url ?? ''}
+          onChange={(e) => onChange({ ...block, url: e.target.value })}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Drag the grip handle or use ↑ ↓ to change line order.
+      </p>
+
+      <DndContext
+        id={`dialogue-lines-${block.id}`}
+        sensors={lineSensors}
+        collisionDetection={closestCenter}
+        onDragEnd={onLineDragEnd}
+      >
+        <SortableContext items={lines.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-3">
+            {lines.map((line, i) => (
+              <SortableDialogueLine
+                key={line.id}
+                id={line.id}
+                index={i}
+                total={lines.length}
+                onMove={moveLine}
+                onRemove={() => setLines(lines.filter((_, idx) => idx !== i))}
+              >
+                <div>
+                  <Label>Alignment</Label>
+                  <select
+                    className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={line.alignment ?? 'left'}
+                    onChange={(e) =>
+                      updateLine(i, { alignment: e.target.value as 'left' | 'right' })
+                    }
+                  >
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+                <Input
+                  placeholder="Speaker"
+                  value={line.speaker}
+                  onChange={(e) => updateLine(i, { speaker: e.target.value })}
+                />
+                <AdminImageField
+                  label="Person image"
+                  folder="avatar"
+                  levelId="ha"
+                  clipLabel={`speaker-${line.speaker || i}`}
+                  value={line.imageUrl ?? ''}
+                  onChange={(next) => updateLine(i, { imageUrl: next })}
+                  avatar
+                />
+                <Input
+                  placeholder="Amharic"
+                  className="font-ethiopic"
+                  value={line.amharic}
+                  onChange={(e) => updateLine(i, { amharic: e.target.value })}
+                />
+                <Input
+                  placeholder="Transliteration"
+                  value={line.transliteration ?? ''}
+                  onChange={(e) => updateLine(i, { transliteration: e.target.value })}
+                />
+                <Input
+                  placeholder="English"
+                  value={line.english ?? ''}
+                  onChange={(e) => updateLine(i, { english: e.target.value })}
+                />
+                <AdminAudioField
+                  name={`dialogue-audio-${block.id}-${line.id}`}
+                  label="Line audio"
+                  folder="dialogue"
+                  levelId="ha"
+                  clipLabel={`line-${line.speaker || i}`}
+                  value={line.audioUrl ?? ''}
+                  onChange={(next) => updateLine(i, { audioUrl: next })}
+                />
+              </SortableDialogueLine>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          setLines([
+            ...lines,
+            {
+              id: crypto.randomUUID(),
+              speaker: '',
+              alignment: 'left',
+              imageUrl: '',
+              amharic: '',
+              transliteration: '',
+              english: '',
+              audioUrl: '',
+            },
+          ])
+        }
+      >
+        Add line
+      </Button>
+    </div>
+  )
+}
+
 function updateBlock(
   blocks: ContentBlock[],
   id: string,
@@ -635,6 +886,34 @@ function BlockFields({
         </div>
       )
     case 'image':
+      return (
+        <>
+          <AdminImageField
+            label="Image"
+            folder="lesson"
+            levelId="ha"
+            clipLabel="lesson-image"
+            value={block.url ?? ''}
+            onChange={(next) => onChange({ ...block, url: next })}
+          />
+          <div>
+            <Label>Caption</Label>
+            <Input
+              className="mt-1.5"
+              value={block.caption ?? ''}
+              onChange={(e) => onChange({ ...block, caption: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Alt text</Label>
+            <Input
+              className="mt-1.5"
+              value={block.alt ?? ''}
+              onChange={(e) => onChange({ ...block, alt: e.target.value })}
+            />
+          </div>
+        </>
+      )
     case 'video':
     case 'audio':
       return (
@@ -656,7 +935,7 @@ function BlockFields({
                 className="mt-1.5"
                 value={block.url ?? ''}
                 onChange={(e) => onChange({ ...block, url: e.target.value })}
-                placeholder={block.type === 'video' ? 'https://… or YouTube link' : 'https://…'}
+                placeholder="https://… or YouTube link"
               />
             </div>
           )}
@@ -677,16 +956,6 @@ function BlockFields({
                 className="mt-1.5"
                 value={block.label ?? ''}
                 onChange={(e) => onChange({ ...block, label: e.target.value })}
-              />
-            </div>
-          ) : null}
-          {'alt' in block ? (
-            <div>
-              <Label>Alt text</Label>
-              <Input
-                className="mt-1.5"
-                value={block.alt ?? ''}
-                onChange={(e) => onChange({ ...block, alt: e.target.value })}
               />
             </div>
           ) : null}
@@ -900,6 +1169,57 @@ function BlockFields({
         <div className="space-y-3">
           {block.items.map((item, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold tracking-wide text-green-700 uppercase">
+                  Reference {i + 1}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={i === 0}
+                    aria-label="Move up"
+                    onClick={() => {
+                      if (i === 0) return
+                      const items = [...block.items]
+                      ;[items[i - 1], items[i]] = [items[i], items[i - 1]]
+                      onChange({ ...block, items })
+                    }}
+                  >
+                    <ChevronUp className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={i === block.items.length - 1}
+                    aria-label="Move down"
+                    onClick={() => {
+                      if (i >= block.items.length - 1) return
+                      const items = [...block.items]
+                      ;[items[i], items[i + 1]] = [items[i + 1], items[i]]
+                      onChange({ ...block, items })
+                    }}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-label="Remove reference"
+                    onClick={() =>
+                      onChange({
+                        ...block,
+                        items: block.items.filter((_, idx) => idx !== i),
+                      })
+                    }
+                  >
+                    <Trash2 className="size-3.5 text-danger-500" />
+                  </Button>
+                </div>
+              </div>
               <Input
                 placeholder="Title"
                 value={item.title}
@@ -937,6 +1257,20 @@ function BlockFields({
                   }}
                 />
               </div>
+              {item.kind === 'article' ? (
+                <AdminImageField
+                  label="Article image (optional)"
+                  folder="article"
+                  levelId="ha"
+                  clipLabel={`article-${i}`}
+                  value={item.imageUrl ?? ''}
+                  onChange={(next) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, imageUrl: next }
+                    onChange({ ...block, items })
+                  }}
+                />
+              ) : null}
               <Input
                 placeholder="Note (optional)"
                 value={item.note ?? ''}
@@ -955,7 +1289,7 @@ function BlockFields({
             onClick={() =>
               onChange({
                 ...block,
-                items: [...block.items, { title: '', kind: 'article', url: '' }],
+                items: [...block.items, { title: '', kind: 'article', url: '', imageUrl: '' }],
               })
             }
           >
@@ -976,111 +1310,10 @@ function BlockFields({
       )
     case 'dialogue':
       return (
-        <div className="space-y-3">
-          <div>
-            <Label>Title</Label>
-            <Input
-              className="mt-1.5"
-              value={block.title}
-              onChange={(e) => onChange({ ...block, title: e.target.value })}
-            />
-          </div>
-          {block.lines.map((line, i) => (
-            <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
-              <div>
-                <Label>Alignment</Label>
-                <select
-                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={line.alignment ?? 'left'}
-                  onChange={(e) => {
-                    const lines = [...block.lines]
-                    lines[i] = {
-                      ...line,
-                      alignment: e.target.value as 'left' | 'right',
-                    }
-                    onChange({ ...block, lines })
-                  }}
-                >
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
-                </select>
-              </div>
-              <Input
-                placeholder="Speaker"
-                value={line.speaker}
-                onChange={(e) => {
-                  const lines = [...block.lines]
-                  lines[i] = { ...line, speaker: e.target.value }
-                  onChange({ ...block, lines })
-                }}
-              />
-              <Input
-                placeholder="Amharic"
-                className="font-ethiopic"
-                value={line.amharic}
-                onChange={(e) => {
-                  const lines = [...block.lines]
-                  lines[i] = { ...line, amharic: e.target.value }
-                  onChange({ ...block, lines })
-                }}
-              />
-              <Input
-                placeholder="Transliteration"
-                value={line.transliteration ?? ''}
-                onChange={(e) => {
-                  const lines = [...block.lines]
-                  lines[i] = { ...line, transliteration: e.target.value }
-                  onChange({ ...block, lines })
-                }}
-              />
-              <Input
-                placeholder="English"
-                value={line.english ?? ''}
-                onChange={(e) => {
-                  const lines = [...block.lines]
-                  lines[i] = { ...line, english: e.target.value }
-                  onChange({ ...block, lines })
-                }}
-              />
-              <AdminAudioField
-                name={`dialogue-audio-${block.id}-${i}`}
-                label="Line audio"
-                folder="dialogue"
-                levelId="ha"
-                clipLabel={`line-${line.speaker || i}`}
-                value={line.audioUrl ?? ''}
-                onChange={(next) => {
-                  const lines = [...block.lines]
-                  lines[i] = { ...line, audioUrl: next }
-                  onChange({ ...block, lines })
-                }}
-              />
-            </div>
-          ))}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              onChange({
-                ...block,
-                lines: [
-                  ...block.lines,
-                    {
-                      speaker: '',
-                      alignment: 'left',
-                      amharic: '',
-                      transliteration: '',
-                      english: '',
-                      audioUrl: '',
-                    },
-                ],
-              })
-            }
-          >
-            Add line
-          </Button>
-        </div>
+        <DialogueLinesEditor
+          block={block}
+          onChange={onChange}
+        />
       )
     case 'vocabulary_set':
     case 'flashcard_revision':

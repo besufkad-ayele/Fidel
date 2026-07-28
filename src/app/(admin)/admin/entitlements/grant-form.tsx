@@ -13,16 +13,24 @@ import { AmharicText } from '@/components/shared/amharic-text'
 type Student = { id: string; full_name: string; email: string }
 type Unit = { id: string; title: string; level_id: string }
 
-export function GrantForm({ students, units }: { students: Student[]; units: Unit[] }) {
+export function GrantForm({
+  students,
+  units,
+  initialStudentId,
+}: {
+  students: Student[]
+  units: Unit[]
+  initialStudentId?: string
+}) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [studentId, setStudentId] = useState('')
+  const [studentId, setStudentId] = useState(initialStudentId ?? '')
   const [scope, setScope] = useState<'level' | 'unit'>('level')
   const [levelIds, setLevelIds] = useState<string[]>(['ha'])
   const [unitIds, setUnitIds] = useState<string[]>([])
   const [source, setSource] = useState('admin_grant')
-  const [note, setNote] = useState('')
+  const [note, setNote] = useState('Admin grant')
   const [expiresAt, setExpiresAt] = useState('')
   const [sessionCredits, setSessionCredits] = useState(0)
 
@@ -36,15 +44,16 @@ export function GrantForm({ students, units }: { students: Student[]; units: Uni
         levelIds,
         unitIds,
         source,
-        note,
+        note: note.trim() || 'Admin grant',
         sessionCredits,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       })
       if (!result.ok) {
+        console.error('[GrantForm]', result.error)
         setError(result.error ?? 'Failed')
         return
       }
-      setNote('')
+      setNote('Admin grant')
       router.refresh()
     })
   }

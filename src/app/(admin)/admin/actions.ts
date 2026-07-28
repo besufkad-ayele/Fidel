@@ -85,7 +85,10 @@ export async function createStudentAction(input: unknown): Promise<ActionResult>
   const { user, profile } = await requireRole('admin')
   const parsed = createStudentSchema.safeParse(input)
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid form data' }
+    console.error('[createStudent] validation failed', parsed.error.flatten())
+    const issue = parsed.error.issues[0]
+    const path = issue?.path?.length ? `${issue.path.join('.')}: ` : ''
+    return { ok: false, error: `${path}${issue?.message ?? 'Invalid form data'}` }
   }
   const data = parsed.data
   const db = await createAdminDb()
@@ -253,6 +256,7 @@ export async function createStudentAction(input: unknown): Promise<ActionResult>
     revalidatePath('/admin')
     return { ok: true, id: userId, email: data.email }
   } catch (err) {
+    console.error('[createStudent] failed', err)
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to create student' }
   }
 }
@@ -427,38 +431,81 @@ export async function grantEntitlementAction(input: unknown): Promise<ActionResu
   const { user, profile } = await requireRole('admin')
   const parsed = grantEntitlementSchema.safeParse(input)
   if (!parsed.success) {
+    console.error('[grantEntitlement] validation failed', parsed.error.flatten())
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid form data' }
   }
   const data = parsed.data
   const db = await createAdminDb()
 
-  const rows =
+  const grantedAt = data.grantedAt?.toISOString() ?? new Date().toISOString()
+  const expiresAt = data.expiresAt?.toISOString() ?? null
+  const targets =
     data.scope === 'level'
-      ? data.levelIds.map((levelId) => ({
-          student_id: data.studentId,
-          scope: 'level' as const,
-          level_id: levelId,
-          unit_id: null,
-          source: data.source,
-          note: data.note,
-          granted_by: user.id,
-          granted_at: data.grantedAt?.toISOString() ?? new Date().toISOString(),
-          expires_at: data.expiresAt?.toISOString() ?? null,
-        }))
-      : data.unitIds.map((unitId) => ({
-          student_id: data.studentId,
-          scope: 'unit' as const,
-          level_id: null,
-          unit_id: unitId,
-          source: data.source,
-          note: data.note,
-          granted_by: user.id,
-          granted_at: data.grantedAt?.toISOString() ?? new Date().toISOString(),
-          expires_at: data.expiresAt?.toISOString() ?? null,
-        }))
+      ? data.levelIds.map((levelId) => ({ levelId, unitId: null as string | null }))
+      : data.unitIds.map((unitId) => ({ levelId: null as string | null, unitId }))
 
-  const { error } = await db.from('entitlements').insert(rows)
-  if (error) return { ok: false, error: error.message }
+  for (const target of targets) {
+    let existingQuery = db
+      .from('entitlements')
+      .select('id, status')
+      .eq('student_id', data.studentId)
+      .eq('scope', data.scope)
+      .order('granted_at', { ascending: false })
+      .limit(1)
+
+    existingQuery =
+      data.scope === 'level'
+        ? existingQuery.eq('level_id', target.levelId!)
+        : existingQuery.eq('unit_id', target.unitId!)
+
+    const { data: existing } = await existingQuery.maybeSingle()
+
+    if (existing?.status === 'active') {
+      return {
+        ok: false,
+        error: `Student already has active access to ${target.levelId ?? target.unitId}`,
+      }
+    }
+
+    if (existing) {
+      const { error } = await db
+        .from('entitlements')
+        .update({
+          status: 'active',
+          source: data.source,
+          note: data.note,
+          granted_by: user.id,
+          granted_at: grantedAt,
+          expires_at: expiresAt,
+          revoked_at: null,
+          revoked_by: null,
+          revoked_reason: null,
+        })
+        .eq('id', existing.id)
+      if (error) {
+        console.error('[grantEntitlement] reactivate failed', error)
+        return { ok: false, error: error.message }
+      }
+      continue
+    }
+
+    const { error } = await db.from('entitlements').insert({
+      student_id: data.studentId,
+      scope: data.scope,
+      level_id: target.levelId,
+      unit_id: target.unitId,
+      source: data.source,
+      note: data.note,
+      granted_by: user.id,
+      granted_at: grantedAt,
+      expires_at: expiresAt,
+      status: 'active',
+    })
+    if (error) {
+      console.error('[grantEntitlement] insert failed', error)
+      return { ok: false, error: error.message }
+    }
+  }
 
   if (data.sessionCredits > 0) {
     await db.from('session_credit_entries').insert({
@@ -481,6 +528,7 @@ export async function grantEntitlementAction(input: unknown): Promise<ActionResu
   })
 
   revalidatePath('/admin/entitlements')
+  revalidatePath(`/admin/people/${data.studentId}`)
   revalidatePath('/admin')
   return { ok: true }
 }

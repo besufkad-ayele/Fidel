@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { Eye, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
 import { createTeacherAction } from '@/app/(admin)/admin/actions'
 import { TIMEZONES } from '@/lib/admin/constants'
 import { Button } from '@/components/ui/button'
@@ -21,6 +23,8 @@ export function TeacherForm() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [timezone, setTimezone] = useState('Africa/Addis_Ababa')
   const [headline, setHeadline] = useState('')
   const [bio, setBio] = useState('')
@@ -28,16 +32,22 @@ export function TeacherForm() {
   const [hourlyRate, setHourlyRate] = useState('')
   const [isAccepting, setIsAccepting] = useState(true)
 
+  function reportError(message: string) {
+    console.error('[TeacherForm]', message)
+    setError(message)
+    toast.error(message)
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+      reportError('Password must be at least 8 characters')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      reportError('Passwords do not match')
       return
     }
 
@@ -60,9 +70,10 @@ export function TeacherForm() {
         isPublic: false,
       })
       if (!result.ok) {
-        setError(result.error ?? 'Failed')
+        reportError(result.error ?? 'Failed')
         return
       }
+      toast.success('Teacher created')
       setCreatedId(result.id ?? null)
       setCreatedEmail(result.email ?? email)
     })
@@ -88,6 +99,15 @@ export function TeacherForm() {
 
   return (
     <form onSubmit={onSubmit} className="max-w-2xl space-y-6">
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-500"
+        >
+          {error}
+        </div>
+      ) : null}
+
       <section className="space-y-4 rounded-xl border border-cream-300 bg-cream-50 p-5 shadow-card">
         <h2 className="font-display text-lg text-green-700">Account</h2>
         <div>
@@ -112,30 +132,50 @@ export function TeacherForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label>Password</Label>
-            <Input
-              className="mt-1.5"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
+            <div className="relative mt-1.5">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-green-700"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Teacher can sign in immediately — no email verification.
             </p>
           </div>
           <div>
             <Label>Confirm password</Label>
-            <Input
-              className="mt-1.5"
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={8}
-            />
+            <div className="relative mt-1.5">
+              <Input
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-green-700"
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
         </div>
         <div>
@@ -196,7 +236,6 @@ export function TeacherForm() {
         </label>
       </section>
 
-      {error ? <p className="text-sm text-danger-500">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? 'Creating…' : 'Create teacher'}
       </Button>

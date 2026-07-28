@@ -155,7 +155,7 @@ export async function revokeEntitlementAction(formData: FormData): Promise<void>
   if (!id || !reason) throw new Error('A revoke reason is required')
 
   const db = await createAdminDb()
-  const { error } = await db
+  const { data: row, error } = await db
     .from('entitlements')
     .update({
       status: 'revoked',
@@ -164,11 +164,77 @@ export async function revokeEntitlementAction(formData: FormData): Promise<void>
       revoked_reason: reason,
     })
     .eq('id', id)
+    .select('student_id')
+    .maybeSingle()
 
   if (error) throw new Error(error.message)
 
   await audit('entitlement.revoke', 'entitlement', id, { reason })
   revalidatePath('/admin/entitlements')
+  if (row?.student_id) revalidatePath(`/admin/people/${row.student_id}`)
+}
+
+export async function restoreEntitlementAction(formData: FormData): Promise<void> {
+  const { user } = await requireRole('admin')
+  const id = String(formData.get('id') ?? '')
+  if (!id) return
+
+  const db = await createAdminDb()
+  const { data: current, error: loadErr } = await db
+    .from('entitlements')
+    .select('id, student_id, scope, level_id, unit_id, status')
+    .eq('id', id)
+    .maybeSingle()
+  if (loadErr) throw new Error(loadErr.message)
+  if (!current) return
+
+  // Clear any other active grant for the same target so unique index allows restore.
+  let conflictQuery = db
+    .from('entitlements')
+    .select('id')
+    .eq('student_id', current.student_id)
+    .eq('scope', current.scope)
+    .eq('status', 'active')
+    .neq('id', id)
+
+  conflictQuery =
+    current.scope === 'level'
+      ? conflictQuery.eq('level_id', current.level_id!)
+      : conflictQuery.eq('unit_id', current.unit_id!)
+
+  const { data: conflicts } = await conflictQuery
+  if (conflicts?.length) {
+    await db
+      .from('entitlements')
+      .update({
+        status: 'revoked',
+        revoked_at: nowIso(),
+        revoked_by: user.id,
+        revoked_reason: 'Superseded by restore of prior entitlement',
+      })
+      .in(
+        'id',
+        conflicts.map((c: { id: string }) => c.id),
+      )
+  }
+
+  const { error } = await db
+    .from('entitlements')
+    .update({
+      status: 'active',
+      granted_at: nowIso(),
+      granted_by: user.id,
+      revoked_at: null,
+      revoked_by: null,
+      revoked_reason: null,
+    })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+
+  await audit('entitlement.restore', 'entitlement', id)
+  revalidatePath('/admin/entitlements')
+  revalidatePath(`/admin/people/${current.student_id}`)
 }
 
 export async function extendEntitlementAction(formData: FormData): Promise<void> {
@@ -178,18 +244,133 @@ export async function extendEntitlementAction(formData: FormData): Promise<void>
   if (!id) return
 
   const db = await createAdminDb()
-  const { error } = await db
+  const { data: row, error } = await db
     .from('entitlements')
     .update({
       expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       status: 'active',
+      revoked_at: null,
+      revoked_by: null,
+      revoked_reason: null,
     })
     .eq('id', id)
+    .select('student_id')
+    .maybeSingle()
 
   if (error) throw new Error(error.message)
 
   await audit('entitlement.extend', 'entitlement', id, { expiresAt })
   revalidatePath('/admin/entitlements')
+  if (row?.student_id) revalidatePath(`/admin/people/${row.student_id}`)
+}
+
+/* ─── Teacher assignments ──────────────────────────────────────────── */
+
+export async function assignTeacherAction(formData: FormData): Promise<void> {
+  const { user } = await requireRole('admin')
+  const studentId = String(formData.get('studentId') ?? '')
+  const teacherId = String(formData.get('teacherId') ?? '')
+  const makePrimary = String(formData.get('makePrimary') ?? '') === 'on'
+  if (!studentId || !teacherId) throw new Error('Student and teacher are required')
+
+  const db = await createAdminDb()
+
+  if (makePrimary) {
+    await db
+      .from('student_teacher_assignments')
+      .update({ is_primary: false })
+      .eq('student_id', studentId)
+  }
+
+  const { data: existing } = await db
+    .from('student_teacher_assignments')
+    .select('id')
+    .eq('student_id', studentId)
+    .eq('teacher_id', teacherId)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await db
+      .from('student_teacher_assignments')
+      .update({ is_primary: makePrimary })
+      .eq('id', existing.id)
+    if (error) throw new Error(error.message)
+  } else {
+    const { count } = await db
+      .from('student_teacher_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('student_id', studentId)
+
+    const { error } = await db.from('student_teacher_assignments').insert({
+      student_id: studentId,
+      teacher_id: teacherId,
+      is_primary: makePrimary || (count ?? 0) === 0,
+      assigned_by: user.id,
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  await audit('teacher.assign', 'profile', studentId, { teacherId, makePrimary })
+  revalidatePath(`/admin/people/${studentId}`)
+  revalidatePath('/admin/people')
+  revalidatePath('/teach')
+}
+
+export async function unassignTeacherAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const assignmentId = String(formData.get('assignmentId') ?? '')
+  const studentId = String(formData.get('studentId') ?? '')
+  if (!assignmentId) return
+
+  const db = await createAdminDb()
+  const { data: removed, error } = await db
+    .from('student_teacher_assignments')
+    .delete()
+    .eq('id', assignmentId)
+    .select('student_id, is_primary')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+
+  const sid = removed?.student_id ?? studentId
+  if (sid && removed?.is_primary) {
+    const { data: next } = await db
+      .from('student_teacher_assignments')
+      .select('id')
+      .eq('student_id', sid)
+      .order('assigned_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (next) {
+      await db.from('student_teacher_assignments').update({ is_primary: true }).eq('id', next.id)
+    }
+  }
+
+  await audit('teacher.unassign', 'profile', sid || assignmentId, { assignmentId })
+  if (sid) revalidatePath(`/admin/people/${sid}`)
+  revalidatePath('/admin/people')
+  revalidatePath('/teach')
+}
+
+export async function setPrimaryTeacherAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const assignmentId = String(formData.get('assignmentId') ?? '')
+  const studentId = String(formData.get('studentId') ?? '')
+  if (!assignmentId || !studentId) return
+
+  const db = await createAdminDb()
+  await db
+    .from('student_teacher_assignments')
+    .update({ is_primary: false })
+    .eq('student_id', studentId)
+  const { error } = await db
+    .from('student_teacher_assignments')
+    .update({ is_primary: true })
+    .eq('id', assignmentId)
+  if (error) throw new Error(error.message)
+
+  await audit('teacher.set_primary', 'profile', studentId, { assignmentId })
+  revalidatePath(`/admin/people/${studentId}`)
 }
 
 /* ─── People lifecycle ─────────────────────────────────────────────── */

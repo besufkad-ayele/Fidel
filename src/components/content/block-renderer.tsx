@@ -107,12 +107,13 @@ function renderBlock(
     }
     case 'rich_text':
       return <MarkdownBody text={block.markdown || ''} />
-    case 'image':
-      return block.url ? (
+    case 'image': {
+      const src = lessonMediaPublicUrl(block.url) || block.url
+      return src ? (
         <figure className="space-y-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={block.url}
+            src={src}
             alt={block.alt || block.caption || ''}
             className="w-full rounded-xl border border-cream-300 object-cover"
           />
@@ -125,6 +126,7 @@ function renderBlock(
           Image placeholder
         </div>
       )
+    }
     case 'video': {
       const embed = block.url ? toVideoEmbedUrl(block.url) : null
       return embed ? (
@@ -265,43 +267,55 @@ function renderBlock(
               }
 
               if (item.kind === 'article') {
+                const articleImage =
+                  lessonMediaPublicUrl(item.imageUrl) || item.imageUrl || null
                 return (
                   <article
                     key={i}
-                    className="space-y-2 rounded-xl border border-cream-300 bg-cream-50 p-4"
+                    className="overflow-hidden rounded-xl border border-cream-300 bg-cream-50"
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
-                        Article
-                      </span>
+                    {articleImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={articleImage}
+                        alt={item.title || 'Article'}
+                        className="h-40 w-full object-cover"
+                      />
+                    ) : null}
+                    <div className="space-y-2 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                          Article
+                        </span>
+                        {item.url ? (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-display text-lg text-green-900 underline-offset-2 hover:underline"
+                          >
+                            {item.title || item.url}
+                          </a>
+                        ) : (
+                          <h3 className="font-display text-lg text-green-900">
+                            {item.title || 'Untitled article'}
+                          </h3>
+                        )}
+                      </div>
+                      {item.note ? (
+                        <p className="text-sm leading-relaxed text-green-800">{item.note}</p>
+                      ) : null}
                       {item.url ? (
                         <a
                           href={item.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-display text-lg text-green-900 underline-offset-2 hover:underline"
+                          className="inline-flex text-sm font-medium text-gold-700 underline-offset-2 hover:underline"
                         >
-                          {item.title || item.url}
+                          Open article →
                         </a>
-                      ) : (
-                        <h3 className="font-display text-lg text-green-900">
-                          {item.title || 'Untitled article'}
-                        </h3>
-                      )}
+                      ) : null}
                     </div>
-                    {item.note ? (
-                      <p className="text-sm leading-relaxed text-green-800">{item.note}</p>
-                    ) : null}
-                    {item.url ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex text-sm font-medium text-gold-700 underline-offset-2 hover:underline"
-                      >
-                        Open article →
-                      </a>
-                    ) : null}
                   </article>
                 )
               }
@@ -349,13 +363,27 @@ function renderBlock(
     case 'dialogue':
       return (
         <div className="space-y-3 rounded-xl border border-cream-300 bg-cream-50 p-4">
-          <p className="font-display text-lg text-green-900">{block.title || 'Dialogue'}</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="font-display text-lg text-green-900">{block.title || 'Dialogue'}</p>
+            {block.url ? (
+              <a
+                href={block.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium text-gold-700 underline-offset-2 hover:underline"
+              >
+                Open dialogue link →
+              </a>
+            ) : null}
+          </div>
           <div className="space-y-3">
             {block.lines.map((line, i) => {
               const alignment = line.alignment ?? (i % 2 === 0 ? 'left' : 'right')
               const isRight = alignment === 'right'
               const initial = (line.speaker || '?').slice(0, 1).toUpperCase()
               const tone = i % 2 === 0 ? 'bg-green-700' : 'bg-gold-600'
+              const avatarSrc =
+                lessonMediaPublicUrl(line.imageUrl) || line.imageUrl || null
               return (
                 <div
                   key={i}
@@ -364,14 +392,23 @@ function renderBlock(
                     isRight && 'flex-row-reverse',
                   )}
                 >
-                  <div
-                    className={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-cream-50',
-                      tone,
-                    )}
-                  >
-                    {initial}
-                  </div>
+                  {avatarSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarSrc}
+                      alt={line.speaker || 'Speaker'}
+                      className="size-8 shrink-0 rounded-full object-cover ring-1 ring-cream-300"
+                    />
+                  ) : (
+                    <div
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-cream-50',
+                        tone,
+                      )}
+                    >
+                      {initial}
+                    </div>
+                  )}
                   <div className={cn('min-w-0 flex-1', isRight && 'text-right')}>
                     <div
                       className={cn(

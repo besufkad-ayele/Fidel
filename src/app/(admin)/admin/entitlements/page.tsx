@@ -9,6 +9,7 @@ import { GrantForm } from './grant-form'
 import {
   revokeEntitlementAction,
   extendEntitlementAction,
+  restoreEntitlementAction,
 } from '@/app/(admin)/admin/manage-actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +24,12 @@ import {
 
 export const metadata: Metadata = { title: 'Entitlements' }
 
-export default async function EntitlementsPage() {
+export default async function EntitlementsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ studentId?: string }>
+}) {
+  const { studentId: preselectedStudentId } = await searchParams
   const db = await createAdminDb()
   const [{ data: entitlements }, { data: students }, { data: units }, { data: profiles }] =
     await Promise.all([
@@ -51,12 +57,16 @@ export default async function EntitlementsPage() {
       <PageHeader
         eyebrow="People & access"
         title="Entitlements"
-        description="Grant levels or specific units after a student already exists."
+        description="Grant levels or specific units after a student already exists. Revoked access can be restored or granted again."
       />
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         <SectionCard title="Grant access">
-          <GrantForm students={students ?? []} units={units ?? []} />
+          <GrantForm
+            students={students ?? []}
+            units={units ?? []}
+            initialStudentId={preselectedStudentId}
+          />
         </SectionCard>
 
         <div>
@@ -130,8 +140,20 @@ export default async function EntitlementsPage() {
                                 </Button>
                               </form>
                             </div>
+                          ) : e.status === 'revoked' ? (
+                            <form action={restoreEntitlementAction}>
+                              <input type="hidden" name="id" value={e.id} />
+                              <Button type="submit" size="sm" variant="outline">
+                                Restore access
+                              </Button>
+                            </form>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <form action={restoreEntitlementAction}>
+                              <input type="hidden" name="id" value={e.id} />
+                              <Button type="submit" size="sm" variant="outline">
+                                Reactivate
+                              </Button>
+                            </form>
                           )}
                         </TableCell>
                       </TableRow>

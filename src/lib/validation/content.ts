@@ -144,6 +144,7 @@ export const referencesBlockSchema = blockBase.extend({
       title: z.string(),
       kind: z.enum(['article', 'video', 'audio', 'other']),
       url: optionalUrl,
+      imageUrl: optionalUrl,
       mediaAssetId: z.string().uuid().optional().nullable(),
       note: z.string().optional(),
     }),
@@ -158,10 +159,14 @@ export const objectivesBlockSchema = blockBase.extend({
 export const dialogueBlockSchema = blockBase.extend({
   type: z.literal('dialogue'),
   title: z.string(),
+  /** Optional external link (video, Drive, transcript, etc.) */
+  url: optionalUrl,
   lines: z.array(
     z.object({
+      id: z.string().min(1).default(() => crypto.randomUUID()),
       speaker: z.string(),
       alignment: z.enum(['left', 'right']).default('left'),
+      imageUrl: optionalUrl,
       amharic: z.string(),
       transliteration: z.string().optional(),
       english: z.string().optional(),
@@ -399,10 +404,13 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       id: 'dialogue',
       type: 'dialogue',
       title: 'Sample dialogue',
+      url: '',
       lines: [
         {
+          id: 'dialogue-line-1',
           speaker: 'A',
           alignment: 'left',
+          imageUrl: '',
           amharic: 'ሰላም',
           transliteration: 'selam',
           english: 'Hello',
@@ -654,7 +662,7 @@ export function createBlock(
         ],
       }
     case 'references':
-      return { id, type, items: [{ title: '', kind: 'article', url: '' }] }
+      return { id, type, items: [{ title: '', kind: 'article', url: '', imageUrl: '' }] }
     case 'objectives':
       return { id, type, items: [''] }
     case 'dialogue':
@@ -662,10 +670,13 @@ export function createBlock(
         id,
         type,
         title: 'Dialogue',
+        url: '',
         lines: [
           {
+            id: crypto.randomUUID(),
             speaker: 'A',
             alignment: 'left',
+            imageUrl: '',
             amharic: '',
             transliteration: '',
             english: '',

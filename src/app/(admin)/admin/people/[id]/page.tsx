@@ -16,6 +16,8 @@ import {
   resendInviteAction,
   resetPasswordAction,
   deletePersonAndRedirectAction,
+  revokeEntitlementAction,
+  restoreEntitlementAction,
 } from '@/app/(admin)/admin/manage-actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TeacherAssignmentPanel } from './teacher-assignment-panel'
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -45,42 +48,71 @@ export default async function PersonDetailPage({ params }: Props) {
   const { data: profile } = await db.from('profiles').select('*').eq('id', id).maybeSingle()
   if (!profile) notFound()
 
-  const [student, teacher, entitlements, payments, notes, assignments] = await Promise.all([
-    db.from('student_profiles').select('*').eq('user_id', id).maybeSingle(),
-    db.from('teacher_profiles').select('*').eq('user_id', id).maybeSingle(),
-    db
-      .from('entitlements')
-      .select('id, scope, level_id, unit_id, source, status, granted_at, expires_at, note')
-      .eq('student_id', id)
-      .order('granted_at', { ascending: false }),
-    db
-      .from('payments')
-      .select('id, amount_cents, currency, provider, status, paid_at, reference')
-      .eq('student_id', id)
-      .order('created_at', { ascending: false }),
-    db
-      .from('student_internal_notes')
-      .select('id, body, created_at')
-      .eq('student_id', id)
-      .order('created_at', { ascending: false }),
-    db
-      .from('student_teacher_assignments')
-      .select('id, teacher_id, is_primary, assigned_at')
-      .or(`student_id.eq.${id},teacher_id.eq.${id}`),
-  ])
+  const [student, teacher, entitlements, payments, notes, assignments, teachers] =
+    await Promise.all([
+      db.from('student_profiles').select('*').eq('user_id', id).maybeSingle(),
+      db.from('teacher_profiles').select('*').eq('user_id', id).maybeSingle(),
+      db
+        .from('entitlements')
+        .select('id, scope, level_id, unit_id, source, status, granted_at, expires_at, note')
+        .eq('student_id', id)
+        .order('granted_at', { ascending: false }),
+      db
+        .from('payments')
+        .select('id, amount_cents, currency, provider, status, paid_at, reference')
+        .eq('student_id', id)
+        .order('created_at', { ascending: false }),
+      db
+        .from('student_internal_notes')
+        .select('id, body, created_at')
+        .eq('student_id', id)
+        .order('created_at', { ascending: false }),
+      db
+        .from('student_teacher_assignments')
+        .select('id, teacher_id, is_primary, assigned_at')
+        .eq('student_id', id)
+        .order('assigned_at', { ascending: true }),
+      db
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'teacher')
+        .eq('is_active', true)
+        .order('full_name'),
+    ])
+
+  const teacherIds = (assignments.data ?? []).map((a: { teacher_id: string }) => a.teacher_id)
+  const { data: assignedProfiles } = teacherIds.length
+    ? await db.from('profiles').select('id, full_name, email').in('id', teacherIds)
+    : { data: [] as { id: string; full_name: string; email: string }[] }
+
+  const nameMap = new Map<string, string>(
+    (assignedProfiles ?? []).map((p: { id: string; full_name: string; email: string }) => [
+      p.id,
+      p.full_name || p.email,
+    ]),
+  )
 
   const status = !profile.is_active ? 'suspended' : profile.activated_at ? 'active' : 'pending'
   const confirmName = profile.full_name || profile.email
+  const isStudent = profile.role === 'student' || !!student.data
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title={profile.full_name || profile.email}
         description={profile.email}
-        actions={[
-          { label: 'Grant access', href: '/admin/entitlements', variant: 'outline' },
-          { label: 'Record payment', href: '/admin/payments', variant: 'outline' },
-        ]}
+        actions={
+          isStudent
+            ? [
+                {
+                  label: 'Grant access',
+                  href: `/admin/entitlements?studentId=${id}`,
+                  variant: 'outline' as const,
+                },
+                { label: 'Record payment', href: '/admin/payments', variant: 'outline' as const },
+              ]
+            : [{ label: 'Record payment', href: '/admin/payments', variant: 'outline' as const }]
+        }
       />
 
       <div className="mb-6 flex flex-wrap gap-2">
@@ -235,49 +267,83 @@ export default async function PersonDetailPage({ params }: Props) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Access">
-          {(entitlements.data ?? []).length === 0 ? (
-            <EmptyState
-              title="No entitlements"
-              description="Grant a level or specific units so this student can open content."
-              actionLabel="Grant access"
-              actionHref="/admin/entitlements"
-              compact
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Expires</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(entitlements.data ?? []).map(
-                  (e: {
-                    id: string
-                    scope: string
-                    level_id: string | null
-                    unit_id: string | null
-                    status: string
-                    expires_at: string | null
-                  }) => (
-                    <TableRow key={e.id}>
-                      <TableCell>{e.scope}</TableCell>
-                      <TableCell>{e.level_id || e.unit_id}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={e.status} />
-                      </TableCell>
-                      <TableCell>{formatDate(e.expires_at)}</TableCell>
-                    </TableRow>
-                  ),
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </SectionCard>
+        {isStudent ? (
+          <SectionCard title="Course access">
+            {(entitlements.data ?? []).length === 0 ? (
+              <EmptyState
+                title="No entitlements"
+                description="Grant a level or specific units so this student can open content."
+                actionLabel="Grant access"
+                actionHref={`/admin/entitlements?studentId=${id}`}
+                compact
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Scope</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(entitlements.data ?? []).map(
+                    (e: {
+                      id: string
+                      scope: string
+                      level_id: string | null
+                      unit_id: string | null
+                      status: string
+                      expires_at: string | null
+                    }) => (
+                      <TableRow key={e.id}>
+                        <TableCell>{e.scope}</TableCell>
+                        <TableCell>{e.level_id || e.unit_id}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={e.status} />
+                        </TableCell>
+                        <TableCell>{formatDate(e.expires_at)}</TableCell>
+                        <TableCell className="text-right">
+                          {e.status === 'active' ? (
+                            <form
+                              action={revokeEntitlementAction}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <input type="hidden" name="id" value={e.id} />
+                              <Input
+                                name="reason"
+                                placeholder="Reason"
+                                className="h-8 w-[120px]"
+                                required
+                              />
+                              <Button type="submit" size="sm" variant="destructive">
+                                Revoke
+                              </Button>
+                            </form>
+                          ) : (
+                            <form action={restoreEntitlementAction}>
+                              <input type="hidden" name="id" value={e.id} />
+                              <Button type="submit" size="sm" variant="outline">
+                                Restore
+                              </Button>
+                            </form>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ),
+                  )}
+                </TableBody>
+              </Table>
+            )}
+            <div className="mt-3">
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/admin/entitlements?studentId=${id}` as '/'}>Grant more access</Link>
+              </Button>
+            </div>
+          </SectionCard>
+        ) : null}
 
         <SectionCard title="Payments">
           {(payments.data ?? []).length === 0 ? (
@@ -314,7 +380,18 @@ export default async function PersonDetailPage({ params }: Props) {
           )}
         </SectionCard>
 
-        <SectionCard title="Notes & assignments">
+        {isStudent ? (
+          <SectionCard title="Temari assignment">
+            <TeacherAssignmentPanel
+              studentId={id}
+              assignments={assignments.data ?? []}
+              teachers={teachers.data ?? []}
+              nameMap={nameMap}
+            />
+          </SectionCard>
+        ) : null}
+
+        <SectionCard title="Internal notes">
           <div className="space-y-4">
             {(notes.data ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No internal notes.</p>
@@ -326,12 +403,6 @@ export default async function PersonDetailPage({ params }: Props) {
                 </div>
               ))
             )}
-            <p className="text-sm text-muted-foreground">
-              Assignments: {(assignments.data ?? []).length} ·{' '}
-              <Link href={'/admin/people' as '/'} className="text-green-700 hover:underline">
-                Back to directory
-              </Link>
-            </p>
           </div>
         </SectionCard>
 
