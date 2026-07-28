@@ -34,6 +34,7 @@ import {
   createEmptyPartContent,
   lessonPartContentSchema,
   normalizePartContent,
+  sanitizePracticeContent,
   type ContentBlock,
   type ContentBlockType,
   type LessonPartContent,
@@ -75,14 +76,336 @@ type PartContentEditorProps = {
   vocabularyOptions: VocabOption[]
 }
 
+function emptyTableRow(cols: number) {
+  return Array.from({ length: cols }, () => '')
+}
+
+function TableBlockFields({
+  block,
+  onChange,
+}: {
+  block: Extract<ContentBlock, { type: 'table' }>
+  onChange: (next: ContentBlock) => void
+}) {
+  const colCount = Math.max(block.headers.length, 1)
+  const isFillable = block.variant === 'multi_row'
+
+  function setHeaders(headers: string[]) {
+    const cols = Math.max(headers.length, 1)
+    onChange({
+      ...block,
+      headers,
+      rows: block.rows.map((row) => {
+        const next = [...row]
+        while (next.length < cols) next.push('')
+        return next.slice(0, cols)
+      }),
+    })
+  }
+
+  function setRows(rows: string[][]) {
+    onChange({ ...block, rows })
+  }
+
+  function updateHeader(index: number, value: string) {
+    const headers = [...block.headers]
+    headers[index] = value
+    setHeaders(headers)
+  }
+
+  function addColumn() {
+    setHeaders([...block.headers, `Column ${block.headers.length + 1}`])
+  }
+
+  function removeColumn(index: number) {
+    if (block.headers.length <= 1) return
+    const headers = block.headers.filter((_, i) => i !== index)
+    onChange({
+      ...block,
+      headers,
+      rows: block.rows.map((row) => row.filter((_, i) => i !== index)),
+    })
+  }
+
+  function updateCell(ri: number, ci: number, value: string) {
+    setRows(
+      block.rows.map((row, i) =>
+        i === ri ? row.map((cell, j) => (j === ci ? value : cell)) : row,
+      ),
+    )
+  }
+
+  function addRow() {
+    setRows([...block.rows, emptyTableRow(colCount)])
+  }
+
+  function removeRow(index: number) {
+    if (block.rows.length <= 1 && !isFillable) return
+    setRows(block.rows.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Table type</Label>
+        <select
+          className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+          value={block.variant ?? 'static'}
+          onChange={(e) =>
+            onChange({
+              ...block,
+              variant: e.target.value as 'static' | 'multi_row',
+            })
+          }
+        >
+          <option value="static">Static (read-only, numbered)</option>
+          <option value="multi_row">Fillable (fixed starters + students add rows)</option>
+        </select>
+      </div>
+
+      <div>
+        <Label>Title (optional)</Label>
+        <Input
+          className="mt-1.5"
+          value={block.title ?? ''}
+          onChange={(e) => onChange({ ...block, title: e.target.value })}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label>Columns</Label>
+          <Button type="button" size="sm" variant="outline" onClick={addColumn}>
+            <Plus className="mr-1 size-3.5" />
+            Add column
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {block.headers.map((header, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-6 shrink-0 text-center text-xs font-semibold text-green-600">
+                {i + 1}
+              </span>
+              <Input
+                value={header}
+                placeholder={`Column ${i + 1} name`}
+                onChange={(e) => updateHeader(i, e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={block.headers.length <= 1}
+                onClick={() => removeColumn(i)}
+                aria-label={`Remove column ${i + 1}`}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <Label>{isFillable ? 'Fixed starter rows' : 'Rows'}</Label>
+            {isFillable ? (
+              <p className="text-[11px] text-green-600">
+                These stay locked for students. They can add empty rows below.
+              </p>
+            ) : (
+              <p className="text-[11px] text-green-600">Numbered automatically for students.</p>
+            )}
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={addRow}>
+            <Plus className="mr-1 size-3.5" />
+            Add row
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border border-cream-300">
+          <table className="w-full min-w-[280px] text-left text-sm">
+            <thead className="bg-cream-100 text-green-800">
+              <tr>
+                <th className="w-8 px-2 py-1.5 text-center text-xs">#</th>
+                {block.headers.map((h, i) => (
+                  <th key={i} className="px-2 py-1.5 text-xs font-semibold">
+                    {h || `Col ${i + 1}`}
+                  </th>
+                ))}
+                <th className="w-10 px-1 py-1.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={block.headers.length + 2}
+                    className="px-3 py-4 text-center text-xs text-green-600"
+                  >
+                    {isFillable
+                      ? 'No fixed rows — students will start with empty rows they can add.'
+                      : 'No rows yet. Click Add row.'}
+                  </td>
+                </tr>
+              ) : (
+                block.rows.map((row, ri) => (
+                  <tr key={ri} className="border-t border-cream-200">
+                    <td className="px-2 py-1 text-center text-xs font-semibold text-green-600">
+                      {ri + 1}
+                    </td>
+                    {Array.from({ length: colCount }).map((_, ci) => (
+                      <td key={ci} className="px-1 py-1">
+                        <Input
+                          className="h-8 min-w-[90px] text-xs"
+                          value={row[ci] ?? ''}
+                          placeholder={block.headers[ci] || `Col ${ci + 1}`}
+                          onChange={(e) => updateCell(ri, ci, e.target.value)}
+                        />
+                      </td>
+                    ))}
+                    <td className="px-1 py-1 text-center">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={!isFillable && block.rows.length <= 1}
+                        onClick={() => removeRow(ri)}
+                        aria-label={`Remove row ${ri + 1}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {isFillable ? (
+        <div>
+          <Label>Max total rows (fixed + student-added)</Label>
+          <Input
+            type="number"
+            className="mt-1.5"
+            value={block.maxRows ?? 20}
+            onChange={(e) => onChange({ ...block, maxRows: Number(e.target.value) || 20 })}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PracticeCategoriesEditor({
+  categories,
+  onChange,
+  onRemoveCategory,
+  sectionLabel,
+}: {
+  categories: { id: string; name: string }[]
+  onChange: (categories: { id: string; name: string }[]) => void
+  onRemoveCategory: (categoryId: string) => void
+  sectionLabel: string
+}) {
+  const [draftName, setDraftName] = useState('')
+
+  function addCategory() {
+    const name = draftName.trim()
+    if (!name) return
+    onChange([...categories, { id: crypto.randomUUID(), name }])
+    setDraftName('')
+  }
+
+  return (
+    <div className="rounded-xl border border-cream-300 bg-cream-50 p-4">
+      <div className="mb-3">
+        <h3 className="font-display text-lg text-green-900">{sectionLabel} categories</h3>
+        <p className="text-xs text-green-600">
+          Optional. Add after your intro content. Blocks set to &quot;Before categories&quot; show
+          above the tabs; assigned blocks show under each tab.
+        </p>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Input
+          className="h-9 max-w-xs flex-1"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addCategory()
+            }
+          }}
+          placeholder="e.g. Writing, Speaking, Listening"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={addCategory}>
+          <Plus className="mr-1 size-3.5" />
+          Add
+        </Button>
+      </div>
+
+      {categories.length === 0 ? (
+        <p className="text-sm text-green-600">
+          No categories yet — all blocks show in one continuous page.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {categories.map((cat) => (
+            <li
+              key={cat.id}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-cream-300 bg-white px-3 py-2"
+            >
+              <Input
+                className="h-8 max-w-xs flex-1"
+                value={cat.name}
+                onChange={(e) =>
+                  onChange(
+                    categories.map((c) =>
+                      c.id === cat.id ? { ...c, name: e.target.value } : c,
+                    ),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-danger-600 hover:bg-danger-50 hover:text-danger-700"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onRemoveCategory(cat.id)
+                }}
+                aria-label={`Delete category ${cat.name || 'untitled'}`}
+              >
+                <Trash2 className="size-3.5" />
+                <span className="ml-1 text-xs">Delete</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function SortableBlock({
   block,
   children,
   onRemove,
+  categories,
+  onCategoryChange,
 }: {
   block: ContentBlock
   children: React.ReactNode
   onRemove: () => void
+  categories?: { id: string; name: string }[]
+  onCategoryChange?: (categoryId: string | null) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
@@ -100,7 +423,7 @@ function SortableBlock({
         isDragging && 'opacity-80 ring-2 ring-gold-400',
       )}
     >
-      <div className="flex items-center justify-between border-b border-cream-200 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cream-200 px-3 py-2">
         <button
           type="button"
           className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-green-700 uppercase"
@@ -109,10 +432,32 @@ function SortableBlock({
         >
           <GripVertical className="size-4 text-green-500" />
           {block.type.replaceAll('_', ' ')}
+          {block.type === 'table' && 'variant' in block
+            ? block.variant === 'multi_row'
+              ? ' · fillable'
+              : ' · static'
+            : null}
         </button>
-        <Button type="button" size="sm" variant="ghost" onClick={onRemove}>
-          <Trash2 className="size-3.5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {categories && categories.length > 0 && onCategoryChange ? (
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={block.categoryId ?? ''}
+              onChange={(e) => onCategoryChange(e.target.value || null)}
+              aria-label="Practice category"
+            >
+              <option value="">Before categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || 'Untitled'}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <Button type="button" size="sm" variant="ghost" onClick={onRemove}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
       </div>
       <div className="space-y-3 p-3">{children}</div>
     </div>
@@ -125,6 +470,120 @@ function updateBlock(
   next: ContentBlock,
 ): ContentBlock[] {
   return blocks.map((b) => (b.id === id ? next : b))
+}
+
+function createPracticeTemplateBlocks(): ContentBlock[] {
+  const heading = createBlock('heading')
+  const intro = createBlock('rich_text')
+  const fill = createBlock('fill_blank')
+  const mcq = createBlock('multiple_choice')
+  const matching = createBlock('matching_cards')
+  const homework = createBlock('homework_prompt')
+
+  if (
+    heading.type !== 'heading' ||
+    intro.type !== 'rich_text' ||
+    fill.type !== 'fill_blank' ||
+    mcq.type !== 'multiple_choice' ||
+    matching.type !== 'matching_cards' ||
+    homework.type !== 'homework_prompt'
+  ) {
+    return []
+  }
+
+  return [
+    {
+      ...heading,
+      text: 'Practice template',
+    },
+    {
+      ...intro,
+      markdown: 'Instructions: complete all exercises and submit at the end.',
+    },
+    {
+      ...fill,
+      title: 'Fill in the blank',
+      prompt: 'Drag a word from the list into each answer slot, then submit & check.',
+      wordBank: ['ሰላም', 'ደህና ነኝ', 'አመሰግናለሁ'],
+      items: [
+        { id: crypto.randomUUID(), question: 'How do you say hello?', answer: 'ሰላም' },
+        { id: crypto.randomUUID(), question: 'How do you say I am fine?', answer: 'ደህና ነኝ' },
+      ],
+    },
+    {
+      ...mcq,
+      prompt: 'Choose the correct translation for ሰላም',
+      options: [
+        { id: crypto.randomUUID(), text: 'Hello / peace', correct: true },
+        { id: crypto.randomUUID(), text: 'Thank you', correct: false },
+      ],
+      explanation: 'Great job. ሰላም means hello/peace.',
+    },
+    {
+      ...matching,
+      prompt: 'Match the pairs',
+      pairs: [
+        { left: 'ሰላም', right: 'Hello' },
+        { left: 'አመሰግናለሁ', right: 'Thank you' },
+      ],
+    },
+    {
+      ...homework,
+      title: 'Homework submission',
+      instructions: 'Upload your worksheet (PDF/photo) or paste a Drive link.',
+      allowText: true,
+      allowAudio: false,
+      allowVideo: false,
+      allowFiles: true,
+      allowDriveLink: true,
+    },
+  ]
+}
+
+function createLessonTemplateBlocks(): ContentBlock[] {
+  const heading = createBlock('heading')
+  const markdown = createBlock('rich_text')
+  const example = createBlock('callout')
+  const objectives = createBlock('objectives')
+  const dialogue = createBlock('dialogue')
+  const table = createBlock('table', { tableVariant: 'static' })
+
+  if (
+    heading.type !== 'heading' ||
+    markdown.type !== 'rich_text' ||
+    example.type !== 'callout' ||
+    objectives.type !== 'objectives' ||
+    dialogue.type !== 'dialogue' ||
+    table.type !== 'table'
+  ) {
+    return []
+  }
+
+  return [
+    { ...heading, text: 'Lesson template' },
+    {
+      ...markdown,
+      markdown:
+        '## Overview\nAdd your custom markdown here.\n\n- Key point 1\n- Key point 2',
+    },
+    {
+      ...example,
+      variant: 'example',
+      title: 'Example',
+      body: 'Use this block to show sample phrases or sentence patterns.',
+    },
+    {
+      ...objectives,
+      items: ['Objective 1', 'Objective 2'],
+    },
+    dialogue,
+    {
+      ...table,
+      title: 'Grammar / Pattern',
+      headers: ['Pattern', 'Meaning'],
+      rows: [['', '']],
+    },
+  ]
 }
 
 function BlockFields({
@@ -244,13 +703,14 @@ function BlockFields({
               onChange={(e) =>
                 onChange({
                   ...block,
-                  variant: e.target.value as 'tip' | 'note' | 'warning',
+                  variant: e.target.value as 'tip' | 'note' | 'warning' | 'example',
                 })
               }
             >
               <option value="tip">Tip</option>
               <option value="note">Note</option>
               <option value="warning">Warning</option>
+              <option value="example">Example</option>
             </select>
           </div>
           <div>
@@ -343,38 +803,97 @@ function BlockFields({
         </div>
       )
     case 'table':
+      return <TableBlockFields block={block} onChange={onChange} />
+    case 'fill_blank':
       return (
-        <>
+        <div className="space-y-3">
           <div>
-            <Label>Headers (comma separated)</Label>
+            <Label>Title</Label>
             <Input
               className="mt-1.5"
-              value={block.headers.join(', ')}
-              onChange={(e) =>
-                onChange({
-                  ...block,
-                  headers: e.target.value.split(',').map((s) => s.trim()),
-                })
-              }
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
             />
           </div>
           <div>
-            <Label>Rows (one row per line, cells with |)</Label>
+            <Label>Prompt (optional)</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Use a word from the list."
+            />
+          </div>
+          <div>
+            <Label>Word list (one per line — shown above questions)</Label>
             <Textarea
-              className="mt-1.5 min-h-[120px] font-mono text-xs"
-              value={block.rows.map((r) => r.join(' | ')).join('\n')}
+              className="mt-1.5 min-h-[80px] font-mono text-xs"
+              value={block.wordBank.join('\n')}
               onChange={(e) =>
                 onChange({
                   ...block,
-                  rows: e.target.value
-                    .split('\n')
-                    .filter(Boolean)
-                    .map((line) => line.split('|').map((c) => c.trim())),
+                  wordBank: e.target.value.split('\n').map((s) => s.trim()),
                 })
               }
+              placeholder={'ሰላም\nደህና ነኝ'}
             />
           </div>
-        </>
+          <div className="space-y-2">
+            <Label>Questions</Label>
+            {block.items.map((item, i) => (
+              <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <Input
+                  placeholder="Question"
+                  value={item.question}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, question: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Input
+                  placeholder="Correct answer"
+                  value={item.answer}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, answer: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={block.items.length <= 1}
+                  onClick={() =>
+                    onChange({
+                      ...block,
+                      items: block.items.filter((_, idx) => idx !== i),
+                    })
+                  }
+                >
+                  Remove question
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  items: [
+                    ...block.items,
+                    { id: crypto.randomUUID(), question: '', answer: '' },
+                  ],
+                })
+              }
+            >
+              Add question
+            </Button>
+          </div>
+        </div>
       )
     case 'references':
       return (
@@ -468,6 +987,24 @@ function BlockFields({
           </div>
           {block.lines.map((line, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+              <div>
+                <Label>Alignment</Label>
+                <select
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={line.alignment ?? 'left'}
+                  onChange={(e) => {
+                    const lines = [...block.lines]
+                    lines[i] = {
+                      ...line,
+                      alignment: e.target.value as 'left' | 'right',
+                    }
+                    onChange({ ...block, lines })
+                  }}
+                >
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
               <Input
                 placeholder="Speaker"
                 value={line.speaker}
@@ -529,7 +1066,14 @@ function BlockFields({
                 ...block,
                 lines: [
                   ...block.lines,
-                  { speaker: '', amharic: '', transliteration: '', english: '', audioUrl: '' },
+                    {
+                      speaker: '',
+                      alignment: 'left',
+                      amharic: '',
+                      transliteration: '',
+                      english: '',
+                      audioUrl: '',
+                    },
                 ],
               })
             }
@@ -878,7 +1422,8 @@ function BlockFields({
                 ['allowText', 'Allow text'],
                 ['allowAudio', 'Allow audio'],
                 ['allowVideo', 'Allow video'],
-                ['allowFiles', 'Allow files'],
+                ['allowFiles', 'Allow PDF/photo upload'],
+                ['allowDriveLink', 'Allow Drive link'],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-sm">
@@ -983,7 +1528,9 @@ export function PartContentEditor({
 
   function save(nextStatus = status) {
     setError(null)
-    const parsed = lessonPartContentSchema.safeParse(doc)
+    const sanitized = sanitizePracticeContent(doc)
+    if (sanitized !== doc) setDoc(sanitized)
+    const parsed = lessonPartContentSchema.safeParse(sanitized)
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Invalid content')
       return
@@ -1078,23 +1625,81 @@ export function PartContentEditor({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg text-green-900">Blocks</h3>
-            <Button type="button" size="sm" variant="outline" onClick={() => setShowPalette((v) => !v)}>
-              <Plus className="mr-1 size-3.5" />
-              Add block
-            </Button>
+            <div className="flex items-center gap-2">
+              {doc.part === 'language_lesson' ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setDoc((prev) => ({
+                        ...prev,
+                        blocks: [...prev.blocks, ...createLessonTemplateBlocks()],
+                      }))
+                    }
+                  >
+                    Add lesson template
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setDoc((prev) => ({
+                        ...prev,
+                        blocks: [
+                          ...prev.blocks,
+                          {
+                            ...createBlock('callout'),
+                            type: 'callout',
+                            variant: 'example',
+                            title: 'Example',
+                            body: '',
+                          },
+                          createBlock('rich_text'),
+                        ],
+                      }))
+                    }
+                  >
+                    Add example + markdown
+                  </Button>
+                </>
+              ) : null}
+              {doc.part === 'practice' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setDoc((prev) => ({
+                      ...prev,
+                      blocks: [...prev.blocks, ...createPracticeTemplateBlocks()],
+                    }))
+                  }
+                >
+                  Add practice template
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" variant="outline" onClick={() => setShowPalette((v) => !v)}>
+                <Plus className="mr-1 size-3.5" />
+                Add block
+              </Button>
+            </div>
           </div>
 
           {showPalette ? (
             <div className="grid gap-2 rounded-xl border border-cream-300 bg-cream-50 p-3 sm:grid-cols-2">
-              {catalog.map((item) => (
+              {catalog.map((item, i) => (
                 <button
-                  key={item.type}
+                  key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
                   type="button"
                   className="rounded-lg border border-cream-300 bg-white px-3 py-2 text-left hover:border-gold-400"
                   onClick={() => {
                     setDoc((prev) => ({
                       ...prev,
-                      blocks: [...prev.blocks, createBlock(item.type as ContentBlockType)],
+                      // New blocks stay before categories until assigned
+                      blocks: [...prev.blocks, createBlock(item.type as ContentBlockType, item.createOptions)],
                     }))
                     setShowPalette(false)
                   }}
@@ -1116,6 +1721,22 @@ export function PartContentEditor({
                   <SortableBlock
                     key={block.id}
                     block={block}
+                    categories={
+                      doc.part === 'practice' || doc.part === 'language_lesson'
+                        ? doc.categories
+                        : undefined
+                    }
+                    onCategoryChange={
+                      doc.part === 'practice' || doc.part === 'language_lesson'
+                        ? (categoryId) =>
+                            setDoc((prev) => ({
+                              ...prev,
+                              blocks: prev.blocks.map((b) =>
+                                b.id === block.id ? { ...b, categoryId } : b,
+                              ),
+                            }))
+                        : undefined
+                    }
                     onRemove={() =>
                       setDoc((prev) => ({
                         ...prev,
@@ -1138,6 +1759,31 @@ export function PartContentEditor({
               </div>
             </SortableContext>
           </DndContext>
+
+          {doc.part === 'practice' || doc.part === 'language_lesson' ? (
+            <PracticeCategoriesEditor
+              categories={doc.categories ?? []}
+              sectionLabel={doc.part === 'practice' ? 'Practice' : 'Lesson'}
+              onChange={(categories) =>
+                setDoc((prev) => {
+                  if (prev.part !== 'practice' && prev.part !== 'language_lesson') return prev
+                  return { ...prev, categories }
+                })
+              }
+              onRemoveCategory={(categoryId) =>
+                setDoc((prev) => {
+                  if (prev.part !== 'practice' && prev.part !== 'language_lesson') return prev
+                  return sanitizePracticeContent({
+                    ...prev,
+                    categories: (prev.categories ?? []).filter((c) => c.id !== categoryId),
+                    blocks: prev.blocks.map((b) =>
+                      b.categoryId === categoryId ? { ...b, categoryId: null } : b,
+                    ),
+                  })
+                })
+              }
+            />
+          ) : null}
         </div>
 
         <div className="xl:sticky xl:top-4 xl:self-start">

@@ -21,6 +21,7 @@ export const contentBlockTypeSchema = z.enum([
   'dos_donts',
   'why_matters',
   'table',
+  'fill_blank',
   'references',
   'objectives',
   'dialogue',
@@ -40,6 +41,8 @@ export type ContentBlockType = z.infer<typeof contentBlockTypeSchema>
 
 const blockBase = z.object({
   id: z.string().min(1),
+  /** Practice category tab this block belongs to (practice parts only). */
+  categoryId: z.string().optional().nullable(),
 })
 
 export const headingBlockSchema = blockBase.extend({
@@ -79,7 +82,7 @@ export const audioBlockSchema = blockBase.extend({
 
 export const calloutBlockSchema = blockBase.extend({
   type: z.literal('callout'),
-  variant: z.enum(['tip', 'note', 'warning']),
+  variant: z.enum(['tip', 'note', 'warning', 'example']),
   title: z.string().optional(),
   body: z.string(),
 })
@@ -102,9 +105,37 @@ export const whyMattersBlockSchema = blockBase.extend({
 
 export const tableBlockSchema = blockBase.extend({
   type: z.literal('table'),
+  /** static = display only; multi_row = students edit cells and can add rows */
+  variant: z.enum(['static', 'multi_row']).default('static'),
+  title: z.string().optional(),
   headers: z.array(z.string()).min(1),
   rows: z.array(z.array(z.string())),
+  maxRows: z.number().int().min(1).max(50).default(20),
 })
+
+export const fillBlankBlockSchema = blockBase.extend({
+  type: z.literal('fill_blank'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Word / phrase bank shown above the questions */
+  wordBank: z.array(z.string()).default([]),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        question: z.string(),
+        answer: z.string(),
+      }),
+    )
+    .min(1),
+})
+
+export const practiceCategorySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1),
+})
+
+export type PracticeCategory = z.infer<typeof practiceCategorySchema>
 
 export const referencesBlockSchema = blockBase.extend({
   type: z.literal('references'),
@@ -130,6 +161,7 @@ export const dialogueBlockSchema = blockBase.extend({
   lines: z.array(
     z.object({
       speaker: z.string(),
+      alignment: z.enum(['left', 'right']).default('left'),
       amharic: z.string(),
       transliteration: z.string().optional(),
       english: z.string().optional(),
@@ -237,6 +269,7 @@ export const homeworkPromptBlockSchema = blockBase.extend({
   allowAudio: z.boolean().default(true),
   allowVideo: z.boolean().default(false),
   allowFiles: z.boolean().default(false),
+  allowDriveLink: z.boolean().default(false),
   maxAudioSeconds: z.number().int().min(5).max(600).optional(),
   maxVideoSeconds: z.number().int().min(5).max(600).optional(),
 })
@@ -255,6 +288,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   dosDontsBlockSchema,
   whyMattersBlockSchema,
   tableBlockSchema,
+  fillBlankBlockSchema,
   referencesBlockSchema,
   objectivesBlockSchema,
   dialogueBlockSchema,
@@ -285,10 +319,12 @@ export const culturalInsightSchema = partBase.extend({
 
 export const languageLessonSchema = partBase.extend({
   part: z.literal('language_lesson'),
+  categories: z.array(practiceCategorySchema).default([]),
 })
 
 export const practiceSchema = partBase.extend({
   part: z.literal('practice'),
+  categories: z.array(practiceCategorySchema).default([]),
 })
 
 export const lessonPartContentSchema = z.discriminatedUnion('part', [
@@ -303,6 +339,22 @@ export type LanguageLessonContent = z.infer<typeof languageLessonSchema>
 export type PracticeContent = z.infer<typeof practiceSchema>
 
 export type LessonPartKey = LessonPartContent['part']
+
+/** Drop blank category names and clear dangling block categoryIds. */
+export function sanitizePracticeContent<T extends LessonPartContent>(doc: T): T {
+  if (doc.part !== 'practice' && doc.part !== 'language_lesson') return doc
+  const categories = (doc.categories ?? [])
+    .map((c) => ({ ...c, name: c.name.trim() }))
+    .filter((c) => c.name.length > 0)
+  const ids = new Set(categories.map((c) => c.id))
+  return {
+    ...doc,
+    categories,
+    blocks: doc.blocks.map((b) =>
+      b.categoryId && !ids.has(b.categoryId) ? { ...b, categoryId: null } : b,
+    ),
+  }
+}
 
 const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
   cultural_insight: [
@@ -350,6 +402,7 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       lines: [
         {
           speaker: 'A',
+          alignment: 'left',
           amharic: 'ሰላም',
           transliteration: 'selam',
           english: 'Hello',
@@ -360,8 +413,10 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
     {
       id: 'grammar',
       type: 'table',
+      variant: 'static',
       headers: ['Amharic', 'Meaning', 'Notes'],
       rows: [['እንዴት ነህ?', 'How are you? (m)', 'Informal masculine']],
+      maxRows: 20,
     },
   ],
   practice: [
@@ -382,6 +437,17 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
         { id: 'c', text: 'Thank you', correct: false },
       ],
       explanation: 'ሰላም is the everyday greeting and also means “peace”.',
+    },
+    {
+      id: 'fill',
+      type: 'fill_blank',
+      title: 'Fill in the blank',
+      prompt: 'Use a word from the list.',
+      wordBank: ['ሰላም', 'ደህና ነኝ', 'አመሰግናለሁ'],
+      items: [
+        { id: 'f1', question: 'How do you say hello?', answer: 'ሰላም' },
+        { id: 'f2', question: 'How do you say “I am fine”?', answer: 'ደህና ነኝ' },
+      ],
     },
     {
       id: 'matching',
@@ -409,6 +475,7 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       allowAudio: true,
       allowVideo: false,
       allowFiles: false,
+      allowDriveLink: false,
       maxAudioSeconds: 60,
     },
   ],
@@ -430,10 +497,36 @@ export function createEmptyPartContent(part: LessonPartKey): LessonPartContent {
     }
   }
 
+  if (part === 'practice') {
+    const writingId = crypto.randomUUID()
+    const speakingId = crypto.randomUUID()
+    // First blocks stay before category tabs (intro); later ones go into tabs.
+    const categorized = blocks.map((block) => {
+      if (block.type === 'flashcard_revision' || block.type === 'heading' || block.type === 'rich_text') {
+        return { ...block, categoryId: null }
+      }
+      if (block.type === 'speaking_task' || block.type === 'homework_prompt') {
+        return { ...block, categoryId: speakingId }
+      }
+      return { ...block, categoryId: writingId }
+    })
+    return {
+      part,
+      version: 1,
+      title: 'Practice',
+      categories: [
+        { id: writingId, name: 'Writing' },
+        { id: speakingId, name: 'Speaking' },
+      ],
+      blocks: categorized,
+    }
+  }
+
   return {
     part,
     version: 1,
-    title: part === 'language_lesson' ? 'Language lesson' : 'Practice',
+    title: 'Language lesson',
+    categories: [],
     blocks,
   }
 }
@@ -468,14 +561,35 @@ export const BLOCK_CATALOG: {
   label: string
   description: string
   parts: LessonPartKey[] | 'all'
+  /** Extra create options (e.g. table variant) */
+  createOptions?: { tableVariant?: 'static' | 'multi_row' }
 }[] = [
   { type: 'heading', label: 'Heading', description: 'Section title', parts: 'all' },
   { type: 'rich_text', label: 'Text', description: 'Markdown paragraph or essay', parts: 'all' },
+  {
+    type: 'rich_text',
+    label: 'Custom markdown',
+    description: 'Free markdown custom content for lesson/practice',
+    parts: ['language_lesson', 'practice'],
+  },
   { type: 'image', label: 'Image', description: 'Inline image with caption', parts: 'all' },
   { type: 'video', label: 'Video', description: 'Embedded or uploaded video', parts: 'all' },
   { type: 'audio', label: 'Audio', description: 'Voice clip or narration', parts: 'all' },
-  { type: 'callout', label: 'Callout', description: 'Tip, note, or warning', parts: 'all' },
-  { type: 'table', label: 'Table', description: 'Grammar or comparison table', parts: 'all' },
+  { type: 'callout', label: 'Callout', description: 'Tip, note, warning, or example', parts: 'all' },
+  {
+    type: 'table',
+    label: 'Static table',
+    description: 'Numbered read-only table — add columns and rows visually',
+    parts: 'all',
+    createOptions: { tableVariant: 'static' },
+  },
+  {
+    type: 'table',
+    label: 'Fillable table',
+    description: 'Named columns, fixed starters, students add rows',
+    parts: 'all',
+    createOptions: { tableVariant: 'multi_row' },
+  },
   { type: 'divider', label: 'Divider', description: 'Visual break', parts: 'all' },
   { type: 'references', label: 'References', description: 'Articles and videos', parts: ['cultural_insight'] },
   { type: 'dos_donts', label: "Do's & don'ts", description: 'Cultural guidance list', parts: ['cultural_insight'] },
@@ -486,14 +600,18 @@ export const BLOCK_CATALOG: {
   { type: 'vocabulary_set', label: 'Vocabulary set', description: 'Linked flashcard words', parts: ['language_lesson', 'practice'] },
   { type: 'flashcard_revision', label: 'Flashcards', description: 'Revision deck', parts: ['practice', 'language_lesson'] },
   { type: 'listening_practice', label: 'Listening practice', description: 'Hear audio and choose the meaning', parts: ['language_lesson', 'practice'] },
+  { type: 'fill_blank', label: 'Fill in the blank', description: 'Drag words to blanks then submit/check', parts: ['practice'] },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: ['practice'] },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: ['practice'] },
   { type: 'speaking_task', label: 'Speaking task', description: 'Timed voice recording', parts: ['practice'] },
   { type: 'video_practice', label: 'Video practice', description: 'Student video submission', parts: ['practice'] },
-  { type: 'homework_prompt', label: 'Homework', description: 'Assignment students submit', parts: ['practice'] },
+  { type: 'homework_prompt', label: 'Homework', description: 'Text/audio/video + PDF/photo or Drive link', parts: ['practice'] },
 ]
 
-export function createBlock(type: ContentBlockType): ContentBlock {
+export function createBlock(
+  type: ContentBlockType,
+  options?: { tableVariant?: 'static' | 'multi_row' },
+): ContentBlock {
   const id = crypto.randomUUID()
   switch (type) {
     case 'heading':
@@ -512,8 +630,29 @@ export function createBlock(type: ContentBlockType): ContentBlock {
       return { id, type, dos: [''], donts: [''] }
     case 'why_matters':
       return { id, type, items: [{ persona: 'default', text: '' }] }
-    case 'table':
-      return { id, type, headers: ['Column 1', 'Column 2'], rows: [['', '']] }
+    case 'table': {
+      const variant = options?.tableVariant ?? 'static'
+      return {
+        id,
+        type,
+        variant,
+        title: variant === 'multi_row' ? 'Complete the table' : undefined,
+        headers: ['', ''],
+        rows: variant === 'multi_row' ? [] : [['', '']],
+        maxRows: 20,
+      }
+    }
+    case 'fill_blank':
+      return {
+        id,
+        type,
+        title: 'Fill in the blank',
+        prompt: 'Choose from the list above.',
+        wordBank: ['', ''],
+        items: [
+          { id: crypto.randomUUID(), question: '', answer: '' },
+        ],
+      }
     case 'references':
       return { id, type, items: [{ title: '', kind: 'article', url: '' }] }
     case 'objectives':
@@ -523,7 +662,16 @@ export function createBlock(type: ContentBlockType): ContentBlock {
         id,
         type,
         title: 'Dialogue',
-        lines: [{ speaker: 'A', amharic: '', transliteration: '', english: '', audioUrl: '' }],
+        lines: [
+          {
+            speaker: 'A',
+            alignment: 'left',
+            amharic: '',
+            transliteration: '',
+            english: '',
+            audioUrl: '',
+          },
+        ],
       }
     case 'vocabulary_set':
       return { id, type, title: 'Vocabulary', vocabularyIds: [], showFlashcards: true }
@@ -595,6 +743,7 @@ export function createBlock(type: ContentBlockType): ContentBlock {
         allowAudio: true,
         allowVideo: false,
         allowFiles: false,
+        allowDriveLink: false,
         maxAudioSeconds: 60,
       }
     case 'divider':

@@ -1,8 +1,10 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { AmharicText } from '@/components/shared/amharic-text'
 import { AudioPlaybackProvider, AudioPlayer } from '@/components/shared/audio-player'
 import { lessonMediaPublicUrl, vocabAudioPublicUrl } from '@/lib/media/urls'
+import { toVideoEmbedUrl } from '@/lib/media/embed'
 import type { ContentBlock, LessonPartContent } from '@/lib/validation/content'
 import { cn } from '@/lib/utils'
 import { InteractiveMultipleChoice } from '@/components/content/interactive/multiple-choice'
@@ -11,6 +13,13 @@ import { InteractiveFlashcards } from '@/components/content/interactive/flashcar
 import { ListeningPractice } from '@/components/content/interactive/listening-practice'
 import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
 import { ComprehensionCheck } from '@/components/content/interactive/comprehension-check'
+import { InteractiveFillBlank } from '@/components/content/interactive/fill-blank'
+import {
+  InteractiveFillableTable,
+  StaticContentTable,
+} from '@/components/content/interactive/fillable-table'
+import { HomeworkSubmission } from '@/components/content/interactive/homework-submission'
+import { PracticeCategoryTabs } from '@/components/features/learn/practice-category-tabs'
 
 export type VocabLookup = Record<
   string,
@@ -116,14 +125,13 @@ function renderBlock(
           Image placeholder
         </div>
       )
-    case 'video':
-      return block.url ? (
+    case 'video': {
+      const embed = block.url ? toVideoEmbedUrl(block.url) : null
+      return embed ? (
         <figure className="space-y-2">
           <div className="aspect-video overflow-hidden rounded-xl border border-cream-300 bg-green-950">
             <iframe
-              src={block.url.includes('youtube.com/watch')
-                ? block.url.replace('watch?v=', 'embed/')
-                : block.url}
+              src={embed}
               title={block.caption || 'Video'}
               className="h-full w-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -139,6 +147,7 @@ function renderBlock(
           Video placeholder
         </div>
       )
+    }
     case 'audio':
       return (
         <AudioPlayer
@@ -153,6 +162,7 @@ function renderBlock(
         tip: 'border-gold-300 bg-gold-50 text-green-900',
         note: 'border-cream-400 bg-cream-100 text-green-900',
         warning: 'border-danger-300 bg-danger-50 text-green-950',
+        example: 'border-blue-300 bg-blue-50 text-green-950',
       }
       return (
         <aside className={cn('rounded-xl border p-4', tones[block.variant])}>
@@ -201,63 +211,126 @@ function renderBlock(
         </div>
       )
     case 'table':
+      if (block.variant === 'multi_row') {
+        return <InteractiveFillableTable block={block} mode={mode} />
+      }
       return (
-        <div className="overflow-x-auto rounded-xl border border-cream-300">
-          <table className="w-full min-w-[320px] text-left text-sm">
-            <thead className="bg-cream-200 text-green-800">
-              <tr>
-                {block.headers.map((h, i) => (
-                  <th key={i} className="px-3 py-2 font-semibold">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row, ri) => (
-                <tr key={ri} className="border-t border-cream-300">
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="px-3 py-2 text-green-900">
-                      {/[ሀ-፼]/.test(cell) ? <AmharicText size="sm">{cell}</AmharicText> : cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <StaticContentTable
+          title={block.title}
+          headers={block.headers}
+          rows={block.rows}
+        />
       )
+    case 'fill_blank':
+      return <InteractiveFillBlank block={block} mode={mode} />
     case 'references':
       return (
-        <div className="space-y-2">
+        <div className="space-y-4">
           <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
             References
           </p>
-          <ul className="space-y-2">
-            {block.items.map((item, i) => (
-              <li
-                key={i}
-                className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm"
-              >
-                <span className="mr-2 rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
-                  {item.kind}
-                </span>
-                {item.url ? (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-green-900 underline-offset-2 hover:underline"
+          <div className="space-y-4">
+            {block.items.map((item, i) => {
+              const embed =
+                item.kind === 'video' && item.url ? toVideoEmbedUrl(item.url) : null
+
+              if (item.kind === 'video' && embed) {
+                return (
+                  <figure
+                    key={i}
+                    className="space-y-2 overflow-hidden rounded-xl border border-cream-300 bg-cream-50 p-3"
                   >
-                    {item.title || item.url}
-                  </a>
-                ) : (
-                  <span className="font-medium text-green-900">{item.title || 'Untitled'}</span>
-                )}
-                {item.note ? <p className="mt-1 text-xs text-green-600">{item.note}</p> : null}
-              </li>
-            ))}
-          </ul>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                        Video
+                      </span>
+                      <p className="text-sm font-medium text-green-900">
+                        {item.title || 'Video'}
+                      </p>
+                    </div>
+                    <div className="aspect-video overflow-hidden rounded-lg bg-green-950">
+                      <iframe
+                        src={embed}
+                        title={item.title || 'Reference video'}
+                        className="h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                    {item.note ? (
+                      <figcaption className="text-xs text-green-600">{item.note}</figcaption>
+                    ) : null}
+                  </figure>
+                )
+              }
+
+              if (item.kind === 'article') {
+                return (
+                  <article
+                    key={i}
+                    className="space-y-2 rounded-xl border border-cream-300 bg-cream-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                        Article
+                      </span>
+                      {item.url ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-display text-lg text-green-900 underline-offset-2 hover:underline"
+                        >
+                          {item.title || item.url}
+                        </a>
+                      ) : (
+                        <h3 className="font-display text-lg text-green-900">
+                          {item.title || 'Untitled article'}
+                        </h3>
+                      )}
+                    </div>
+                    {item.note ? (
+                      <p className="text-sm leading-relaxed text-green-800">{item.note}</p>
+                    ) : null}
+                    {item.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex text-sm font-medium text-gold-700 underline-offset-2 hover:underline"
+                      >
+                        Open article →
+                      </a>
+                    ) : null}
+                  </article>
+                )
+              }
+
+              return (
+                <div
+                  key={i}
+                  className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm"
+                >
+                  <span className="mr-2 rounded bg-cream-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                    {item.kind}
+                  </span>
+                  {item.url ? (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-green-900 underline-offset-2 hover:underline"
+                    >
+                      {item.title || item.url}
+                    </a>
+                  ) : (
+                    <span className="font-medium text-green-900">{item.title || 'Untitled'}</span>
+                  )}
+                  {item.note ? <p className="mt-1 text-xs text-green-600">{item.note}</p> : null}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )
     case 'objectives':
@@ -279,12 +352,17 @@ function renderBlock(
           <p className="font-display text-lg text-green-900">{block.title || 'Dialogue'}</p>
           <div className="space-y-3">
             {block.lines.map((line, i) => {
+              const alignment = line.alignment ?? (i % 2 === 0 ? 'left' : 'right')
+              const isRight = alignment === 'right'
               const initial = (line.speaker || '?').slice(0, 1).toUpperCase()
               const tone = i % 2 === 0 ? 'bg-green-700' : 'bg-gold-600'
               return (
                 <div
                   key={i}
-                  className="flex gap-3 rounded-lg bg-white/70 p-3 ring-1 ring-cream-300"
+                  className={cn(
+                    'flex gap-3 rounded-lg bg-white/70 p-3 ring-1 ring-cream-300',
+                    isRight && 'flex-row-reverse',
+                  )}
                 >
                   <div
                     className={cn(
@@ -294,8 +372,13 @@ function renderBlock(
                   >
                     {initial}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className={cn('min-w-0 flex-1', isRight && 'text-right')}>
+                    <div
+                      className={cn(
+                        'mb-1 flex items-center justify-between gap-2',
+                        isRight && 'flex-row-reverse',
+                      )}
+                    >
                       <p className="text-[11px] font-semibold tracking-wide text-gold-700 uppercase">
                         {line.speaker}
                       </p>
@@ -501,43 +584,7 @@ function renderBlock(
         />
       )
     case 'homework_prompt':
-      return (
-        <div className="space-y-3 rounded-xl border border-gold-300 bg-gold-50 p-5">
-          <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">Homework</p>
-          <h3 className="font-display text-xl text-green-900">{block.title}</h3>
-          <p className="text-sm leading-relaxed text-green-800">{block.instructions}</p>
-          <div className="flex flex-wrap gap-2 text-[11px] font-medium text-green-700">
-            {block.allowText ? <span className="rounded-full bg-white/70 px-2 py-1">Text</span> : null}
-            {block.allowAudio ? (
-              <span className="rounded-full bg-white/70 px-2 py-1">
-                Audio{block.maxAudioSeconds ? ` ≤ ${block.maxAudioSeconds}s` : ''}
-              </span>
-            ) : null}
-            {block.allowVideo ? (
-              <span className="rounded-full bg-white/70 px-2 py-1">
-                Video{block.maxVideoSeconds ? ` ≤ ${block.maxVideoSeconds}s` : ''}
-              </span>
-            ) : null}
-            {block.allowFiles ? <span className="rounded-full bg-white/70 px-2 py-1">Files</span> : null}
-          </div>
-          {block.allowAudio ? (
-            <TimedRecorder
-              kind="audio"
-              prompt="Record your homework response"
-              maxSeconds={block.maxAudioSeconds ?? 60}
-              mode={mode}
-            />
-          ) : null}
-          {block.allowVideo ? (
-            <TimedRecorder
-              kind="video"
-              prompt="Record your video practice"
-              maxSeconds={block.maxVideoSeconds ?? 60}
-              mode={mode}
-            />
-          ) : null}
-        </div>
-      )
+      return <HomeworkSubmission block={block} mode={mode} />
     case 'divider':
       return <hr className="border-cream-300" />
     default:
@@ -551,6 +598,31 @@ export function BlockRenderer({
   mode = 'student',
   className,
 }: BlockRendererProps) {
+  const categories =
+    content.part === 'practice' || content.part === 'language_lesson'
+      ? content.categories ?? []
+      : []
+  const categoryIds = useMemo(() => new Set(categories.map((c) => c.id)), [categories])
+  const [activeCategory, setActiveCategory] = useState(() => categories[0]?.id ?? '')
+
+  const resolvedActive = useMemo(() => {
+    if (categories.length === 0) return ''
+    if (categories.some((c) => c.id === activeCategory)) return activeCategory
+    return categories[0]?.id ?? ''
+  }, [activeCategory, categories])
+
+  /** Intro / details shown above tabs when no category is assigned. */
+  const beforeBlocks = useMemo(() => {
+    if (categories.length === 0) return content.blocks
+    return content.blocks.filter((b) => !b.categoryId || !categoryIds.has(b.categoryId))
+  }, [categories.length, categoryIds, content.blocks])
+
+  const categoryBlocks = useMemo(() => {
+    if (categories.length === 0) return []
+    if (!resolvedActive) return []
+    return content.blocks.filter((b) => b.categoryId === resolvedActive)
+  }, [resolvedActive, categories.length, content.blocks])
+
   return (
     <AudioPlaybackProvider>
       <article className={cn('space-y-6', className)}>
@@ -576,9 +648,26 @@ export function BlockRenderer({
           </header>
         ) : null}
 
-        {content.blocks.map((block) => (
+        {beforeBlocks.map((block) => (
           <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
         ))}
+
+        {categories.length > 0 ? (
+          <div className="space-y-6">
+            <PracticeCategoryTabs
+              categories={categories}
+              activeId={resolvedActive}
+              onChange={setActiveCategory}
+            />
+            {categoryBlocks.length === 0 ? (
+              <p className="text-sm text-green-600">No exercises in this category yet.</p>
+            ) : (
+              categoryBlocks.map((block) => (
+                <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
+              ))
+            )}
+          </div>
+        ) : null}
       </article>
     </AudioPlaybackProvider>
   )
