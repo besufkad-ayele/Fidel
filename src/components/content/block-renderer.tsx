@@ -165,11 +165,24 @@ function renderBlock(
         note: 'border-cream-400 bg-cream-100 text-green-900',
         warning: 'border-danger-300 bg-danger-50 text-green-950',
         example: 'border-blue-300 bg-blue-50 text-green-950',
+        teacher: 'border-green-700/30 bg-green-50 text-green-950',
       }
       return (
         <aside className={cn('rounded-xl border p-4', tones[block.variant])}>
           {block.title ? <p className="mb-1 text-sm font-semibold">{block.title}</p> : null}
           <p className="text-sm leading-relaxed">{block.body}</p>
+        </aside>
+      )
+    }
+    case 'teacher_note': {
+      if (mode === 'student' && !block.visibleToStudents) return null
+      return (
+        <aside className="rounded-xl border border-dashed border-green-700/40 bg-green-50/80 p-4">
+          <p className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-green-700 uppercase">
+            {mode === 'student' ? 'Study tip' : 'Teacher note'}
+          </p>
+          {block.title ? <p className="mb-1 text-sm font-semibold text-green-900">{block.title}</p> : null}
+          <p className="text-sm leading-relaxed text-green-900">{block.body}</p>
         </aside>
       )
     }

@@ -18,6 +18,7 @@ export const contentBlockTypeSchema = z.enum([
   'video',
   'audio',
   'callout',
+  'teacher_note',
   'dos_donts',
   'why_matters',
   'table',
@@ -82,9 +83,18 @@ export const audioBlockSchema = blockBase.extend({
 
 export const calloutBlockSchema = blockBase.extend({
   type: z.literal('callout'),
-  variant: z.enum(['tip', 'note', 'warning', 'example']),
+  variant: z.enum(['tip', 'note', 'warning', 'example', 'teacher']),
   title: z.string().optional(),
   body: z.string(),
+})
+
+/** Instructor guidance — shown in admin/preview; hidden from students by default. */
+export const teacherNoteBlockSchema = blockBase.extend({
+  type: z.literal('teacher_note'),
+  title: z.string().optional(),
+  body: z.string(),
+  /** When true, students also see this note (e.g. study tips). */
+  visibleToStudents: z.boolean().default(false),
 })
 
 export const dosDontsBlockSchema = blockBase.extend({
@@ -270,13 +280,24 @@ export const homeworkPromptBlockSchema = blockBase.extend({
   type: z.literal('homework_prompt'),
   title: z.string(),
   instructions: z.string(),
+  /** Teacher materials: external link and/or uploaded worksheet file. */
+  assignmentLink: z.string().default(''),
+  assignmentFileUrl: z.string().default(''),
+  assignmentFileName: z.string().default(''),
+  /** Student response channels */
   allowText: z.boolean().default(true),
   allowAudio: z.boolean().default(true),
-  allowVideo: z.boolean().default(false),
+  allowVideo: z.boolean().default(true),
+  /** Writing: paste a Google Drive link */
+  allowDriveLink: z.boolean().default(true),
+  /** Writing: upload a single image (see maxImageBytes) */
+  allowImage: z.boolean().default(true),
+  /** Optional PDF worksheet upload from the student */
   allowFiles: z.boolean().default(false),
-  allowDriveLink: z.boolean().default(false),
   maxAudioSeconds: z.number().int().min(5).max(600).optional(),
   maxVideoSeconds: z.number().int().min(5).max(600).optional(),
+  /** Default 1MB for writing image answers */
+  maxImageBytes: z.number().int().min(50_000).max(5_000_000).default(1_048_576),
 })
 
 export const dividerBlockSchema = blockBase.extend({
@@ -290,6 +311,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   videoBlockSchema,
   audioBlockSchema,
   calloutBlockSchema,
+  teacherNoteBlockSchema,
   dosDontsBlockSchema,
   whyMattersBlockSchema,
   tableBlockSchema,
@@ -478,13 +500,20 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       id: 'homework',
       type: 'homework_prompt',
       title: 'Unit homework',
-      instructions: 'Practice the greetings with a partner and submit a short voice note.',
+      instructions:
+        'Complete the worksheet (link or file below). For writing, paste a Drive link or upload a photo (max 1MB). You may also upload or record audio/video.',
+      assignmentLink: '',
+      assignmentFileUrl: '',
+      assignmentFileName: '',
       allowText: true,
       allowAudio: true,
-      allowVideo: false,
+      allowVideo: true,
+      allowDriveLink: true,
+      allowImage: true,
       allowFiles: false,
-      allowDriveLink: false,
       maxAudioSeconds: 60,
+      maxVideoSeconds: 90,
+      maxImageBytes: 1_048_576,
     },
   ],
 }
@@ -577,13 +606,19 @@ export const BLOCK_CATALOG: {
   {
     type: 'rich_text',
     label: 'Custom markdown',
-    description: 'Free markdown custom content for lesson/practice',
-    parts: ['language_lesson', 'practice'],
+    description: 'Free markdown custom content',
+    parts: 'all',
   },
   { type: 'image', label: 'Image', description: 'Inline image with caption', parts: 'all' },
   { type: 'video', label: 'Video', description: 'Embedded or uploaded video', parts: 'all' },
   { type: 'audio', label: 'Audio', description: 'Voice clip or narration', parts: 'all' },
-  { type: 'callout', label: 'Callout', description: 'Tip, note, warning, or example', parts: 'all' },
+  { type: 'callout', label: 'Callout', description: 'Tip, note, warning, example, or teacher tip', parts: 'all' },
+  {
+    type: 'teacher_note',
+    label: 'Teacher note',
+    description: 'Teaching guidance — hidden from students unless you opt in',
+    parts: 'all',
+  },
   {
     type: 'table',
     label: 'Static table',
@@ -599,21 +634,26 @@ export const BLOCK_CATALOG: {
     createOptions: { tableVariant: 'multi_row' },
   },
   { type: 'divider', label: 'Divider', description: 'Visual break', parts: 'all' },
-  { type: 'references', label: 'References', description: 'Articles and videos', parts: ['cultural_insight'] },
-  { type: 'dos_donts', label: "Do's & don'ts", description: 'Cultural guidance list', parts: ['cultural_insight'] },
-  { type: 'why_matters', label: 'Why it matters', description: 'Persona-framed framing', parts: ['cultural_insight'] },
-  { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: ['cultural_insight'] },
-  { type: 'objectives', label: 'Objectives', description: 'Lesson goals', parts: ['language_lesson'] },
-  { type: 'dialogue', label: 'Dialogue', description: 'Multi-line conversation', parts: ['language_lesson'] },
-  { type: 'vocabulary_set', label: 'Vocabulary set', description: 'Linked flashcard words', parts: ['language_lesson', 'practice'] },
-  { type: 'flashcard_revision', label: 'Flashcards', description: 'Revision deck', parts: ['practice', 'language_lesson'] },
-  { type: 'listening_practice', label: 'Listening practice', description: 'Hear audio and choose the meaning', parts: ['language_lesson', 'practice'] },
-  { type: 'fill_blank', label: 'Fill in the blank', description: 'Drag words to blanks then submit/check', parts: ['practice'] },
-  { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: ['practice'] },
-  { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: ['practice'] },
-  { type: 'speaking_task', label: 'Speaking task', description: 'Timed voice recording', parts: ['practice'] },
-  { type: 'video_practice', label: 'Video practice', description: 'Student video submission', parts: ['practice'] },
-  { type: 'homework_prompt', label: 'Homework', description: 'Text/audio/video + PDF/photo or Drive link', parts: ['practice'] },
+  { type: 'objectives', label: 'Objectives', description: 'Lesson / practice goals', parts: 'all' },
+  { type: 'dialogue', label: 'Dialogue', description: 'Multi-line conversation', parts: 'all' },
+  { type: 'vocabulary_set', label: 'Vocabulary set', description: 'Linked flashcard words', parts: 'all' },
+  { type: 'flashcard_revision', label: 'Flashcards', description: 'Revision deck', parts: 'all' },
+  { type: 'listening_practice', label: 'Listening practice', description: 'Hear audio and choose the meaning', parts: 'all' },
+  { type: 'fill_blank', label: 'Fill in the blank', description: 'Drag words to blanks then submit/check', parts: 'all' },
+  { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
+  { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
+  { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
+  { type: 'speaking_task', label: 'Speaking task', description: 'Timed voice recording', parts: 'all' },
+  { type: 'video_practice', label: 'Video practice', description: 'Student video submission', parts: 'all' },
+  {
+    type: 'homework_prompt',
+    label: 'Homework',
+    description: 'Assign via link/file · students reply with audio/video, Drive link, or image ≤1MB',
+    parts: 'all',
+  },
+  { type: 'references', label: 'References', description: 'Articles and videos', parts: 'all' },
+  { type: 'dos_donts', label: "Do's & don'ts", description: 'Guidance list', parts: 'all' },
+  { type: 'why_matters', label: 'Why it matters', description: 'Persona-framed framing', parts: 'all' },
 ]
 
 export function createBlock(
@@ -634,6 +674,14 @@ export function createBlock(
       return { id, type, url: '', label: 'Listen' }
     case 'callout':
       return { id, type, variant: 'tip', title: 'Tip', body: '' }
+    case 'teacher_note':
+      return {
+        id,
+        type,
+        title: 'Teaching note',
+        body: '',
+        visibleToStudents: false,
+      }
     case 'dos_donts':
       return { id, type, dos: [''], donts: [''] }
     case 'why_matters':
@@ -750,12 +798,18 @@ export function createBlock(
         type,
         title: 'Homework',
         instructions: '',
+        assignmentLink: '',
+        assignmentFileUrl: '',
+        assignmentFileName: '',
         allowText: true,
         allowAudio: true,
-        allowVideo: false,
+        allowVideo: true,
+        allowDriveLink: true,
+        allowImage: true,
         allowFiles: false,
-        allowDriveLink: false,
         maxAudioSeconds: 60,
+        maxVideoSeconds: 90,
+        maxImageBytes: 1_048_576,
       }
     case 'divider':
       return { id, type }

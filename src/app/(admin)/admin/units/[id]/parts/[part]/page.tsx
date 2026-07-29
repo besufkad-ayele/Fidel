@@ -45,8 +45,13 @@ export default async function PartEditorPage({ params }: Props) {
   const { data: unit } = await db.from('units').select('id, title, level_id').eq('id', id).maybeSingle()
   if (!unit) notFound()
 
-  const [{ data: part }, { data: vocabulary }] = await Promise.all([
+  const [{ data: part }, { data: unitVocabLinks }, { data: levelVocabulary }] = await Promise.all([
     db.from('lesson_parts').select('*').eq('unit_id', id).eq('part', partKey).maybeSingle(),
+    db
+      .from('unit_vocabulary')
+      .select('vocabulary_id, sort_order')
+      .eq('unit_id', id)
+      .order('sort_order'),
     db
       .from('vocabulary_items')
       .select(
@@ -54,24 +59,64 @@ export default async function PartEditorPage({ params }: Props) {
       )
       .eq('level_id', unit.level_id)
       .order('amharic')
-      .limit(200),
+      .limit(300),
   ])
+
+  const unitVocabIds = new Set(
+    (unitVocabLinks ?? []).map((l: { vocabulary_id: string }) => l.vocabulary_id),
+  )
+  const mappedVocab = (levelVocabulary ?? []).map(
+    (v: {
+      id: string
+      amharic: string
+      english: string
+      transliteration: string | null
+      example_amharic?: string | null
+      example_english?: string | null
+      audio_slow_path?: string | null
+      audio_normal_path?: string | null
+      audio_natural_path?: string | null
+    }) => ({
+      id: v.id,
+      amharic: v.amharic,
+      english: v.english,
+      transliteration: v.transliteration,
+      exampleAmharic: v.example_amharic ?? null,
+      exampleEnglish: v.example_english ?? null,
+      audioSlow: v.audio_slow_path ?? null,
+      audioNormal: v.audio_normal_path ?? null,
+      audioNatural: v.audio_natural_path ?? null,
+      assignedToUnit: unitVocabIds.has(v.id),
+    }),
+  )
+
+  // Prefer unit-assigned words first for linking in the editor
+  const vocabularyOptions = [
+    ...mappedVocab.filter((v: { assignedToUnit: boolean }) => v.assignedToUnit),
+    ...mappedVocab.filter((v: { assignedToUnit: boolean }) => !v.assignedToUnit),
+  ]
 
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
         title={`${PART_TITLES[partKey]} · ${unit.title}`}
         description={PART_HELP[partKey]}
-        actions={[{ label: 'Back to unit', href: `/admin/units/${id}`, variant: 'outline' }]}
+        actions={[
+          { label: 'Unit vocabulary', href: `/admin/units/${id}/vocabulary`, variant: 'outline' },
+          { label: 'Back to unit', href: `/admin/units/${id}`, variant: 'outline' },
+        ]}
       />
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusBadge status={part?.status ?? 'draft'} />
+        <span className="text-sm text-muted-foreground">
+          {unitVocabIds.size} word{unitVocabIds.size === 1 ? '' : 's'} assigned to this unit
+        </span>
       </div>
 
       <SectionCard
         title="Content studio"
-        description="Drag blocks to reorder. The right panel shows exactly what students will see."
+        description="Drag blocks to reorder. Vocabulary pickers list this unit’s words first."
       >
         <PartContentEditor
           unitId={id}
@@ -80,29 +125,7 @@ export default async function PartEditorPage({ params }: Props) {
           initialContent={part?.content ?? {}}
           initialStatus={part?.status ?? 'draft'}
           partExists={Boolean(part?.id)}
-          vocabularyOptions={(vocabulary ?? []).map(
-            (v: {
-              id: string
-              amharic: string
-              english: string
-              transliteration: string | null
-              example_amharic?: string | null
-              example_english?: string | null
-              audio_slow_path?: string | null
-              audio_normal_path?: string | null
-              audio_natural_path?: string | null
-            }) => ({
-              id: v.id,
-              amharic: v.amharic,
-              english: v.english,
-              transliteration: v.transliteration,
-              exampleAmharic: v.example_amharic ?? null,
-              exampleEnglish: v.example_english ?? null,
-              audioSlow: v.audio_slow_path ?? null,
-              audioNormal: v.audio_normal_path ?? null,
-              audioNatural: v.audio_natural_path ?? null,
-            }),
-          )}
+          vocabularyOptions={vocabularyOptions}
         />
       </SectionCard>
     </div>

@@ -1,82 +1,75 @@
 import Link from 'next/link'
 import { BrandLogo } from '@/components/shared/brand-logo'
+import { FidelLetterFall } from '@/components/features/auth/fidel-letter-fall'
 import { routes } from '@/lib/auth/routes'
+import { BRAND } from '@/lib/constants/brand'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[42%_58%]">
-      <aside className="relative hidden overflow-hidden bg-green-700 lg:block">
-        <div className="img-card-overlay absolute inset-0" />
-        <div className="relative z-10 flex h-full flex-col justify-between p-10 text-cream-50">
-          <Link href={routes.home} className="inline-flex items-center gap-3" aria-label="Back to Fidel home">
-            <BrandLogo size={64} showWordmark={false} priority />
-            <span className="font-display text-2xl text-cream-50">Fidel</span>
+    <div className="grid min-h-dvh lg:grid-cols-[46%_54%]">
+      <aside className="relative hidden overflow-hidden lg:block">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 90% 70% at 20% 15%, #3d6360 0%, transparent 55%), radial-gradient(ellipse 70% 60% at 90% 80%, #2a4a48 0%, transparent 50%), linear-gradient(165deg, #1a3636 0%, #142a2a 48%, #0f2020 100%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(224,186,111,0.45) 1px, transparent 0)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+        <div className="img-card-overlay absolute inset-0 opacity-40" />
+
+        <div className="relative z-10 flex h-full min-h-[640px] flex-col justify-between p-10 text-cream-50 xl:p-12">
+          <Link
+            href={routes.home}
+            className="inline-flex w-fit items-center gap-3"
+            aria-label="Back to Fidel home"
+          >
+            <BrandLogo size={48} showWordmark={false} priority />
+            <span className="font-display text-lg tracking-wide text-cream-100/90">{BRAND.name}</span>
           </Link>
-          <blockquote className="max-w-sm">
-            <p className="font-display text-2xl leading-snug">
+
+          <div className="my-auto py-10">
+            <FidelLetterFall tone="onDark" size="hero" className="max-w-xl" />
+            <p className="mt-6 max-w-md font-display text-xl leading-snug text-cream-100/90 xl:text-2xl">
               Culture first. Language next. Practice until it sticks.
             </p>
-            <footer className="mt-4 text-sm text-cream-100/70">
+            <p className="mt-3 max-w-sm text-sm text-cream-100/55">
               Built for diplomats, NGO staff, and returning diaspora in Ethiopia.
-            </footer>
-          </blockquote>
+            </p>
+          </div>
+
+          <p className="text-xs tracking-wide text-cream-100/40 uppercase">
+            {BRAND.amharic} · Amharic script
+          </p>
         </div>
       </aside>
 
-      <div className="relative flex items-center justify-center overflow-hidden bg-gradient-to-b from-cream-50 to-white px-4 py-10 sm:px-8">
+      <div className="relative flex items-center justify-center overflow-hidden bg-gradient-to-b from-cream-50 via-cream-100/80 to-white px-4 py-10 sm:px-8">
+        <div
+          className="pointer-events-none absolute -top-24 right-[-10%] h-72 w-72 rounded-full opacity-40 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #e0ba6f 0%, transparent 70%)' }}
+        />
+        <div
+          className="pointer-events-none absolute bottom-[-10%] left-[-8%] h-80 w-80 rounded-full opacity-30 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #8fb0ac 0%, transparent 70%)' }}
+        />
+
         <div className="relative z-10 w-full max-w-[460px] rounded-2xl border border-cream-300 bg-white/90 p-6 shadow-card backdrop-blur-sm sm:p-8">
-          <div className="mb-6 flex justify-center lg:mb-8">
-            <Link href={routes.home} aria-label="Back to Fidel home" className="group relative inline-flex">
-              <span className="auth-water-shape auth-water-shape-a" />
-              <span className="auth-water-shape auth-water-shape-b" />
-              <span className="auth-water-shape auth-water-shape-c" />
-              <span className="relative z-10 rounded-full bg-white/85 p-2 shadow-sm">
-                <BrandLogo size={78} showWordmark={false} priority />
-              </span>
+          <div className="mb-2 flex flex-col items-center lg:mb-4">
+            <Link href={routes.home} aria-label="Back to Fidel home" className="w-full max-w-[240px]">
+              <FidelLetterFall tone="onLight" size="compact" />
             </Link>
           </div>
           {children}
         </div>
       </div>
-      <style>{`
-        @keyframes authFloatA {
-          0%, 100% { transform: translate(-12%, -8%) scale(1); }
-          50% { transform: translate(-8%, -18%) scale(1.06); }
-        }
-        @keyframes authFloatB {
-          0%, 100% { transform: translate(10%, 10%) scale(1); }
-          50% { transform: translate(14%, 2%) scale(1.08); }
-        }
-        @keyframes authFloatC {
-          0%, 100% { transform: translate(0%, 0%) scale(1); }
-          50% { transform: translate(-2%, 6%) scale(0.94); }
-        }
-        .auth-water-shape {
-          position: absolute;
-          border-radius: 9999px;
-          opacity: 0.55;
-          filter: blur(0.5px);
-        }
-        .auth-water-shape-a {
-          width: 108px;
-          height: 108px;
-          background: radial-gradient(circle at 30% 30%, #f8d489 0%, #d6ad60 62%, #be9345 100%);
-          animation: authFloatA 5.8s ease-in-out infinite;
-        }
-        .auth-water-shape-b {
-          width: 92px;
-          height: 92px;
-          background: radial-gradient(circle at 35% 30%, #b7dfdd 0%, #5f8783 68%, #2a4a48 100%);
-          animation: authFloatB 6.6s ease-in-out infinite;
-        }
-        .auth-water-shape-c {
-          width: 122px;
-          height: 122px;
-          background: radial-gradient(circle at 40% 28%, #fff6de 0%, #f3dfb2 72%, #e0ba6f 100%);
-          animation: authFloatC 7.4s ease-in-out infinite;
-          opacity: 0.42;
-        }
-      `}</style>
     </div>
   )
 }

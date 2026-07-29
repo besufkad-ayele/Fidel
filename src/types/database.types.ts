@@ -302,6 +302,8 @@ export type Database = {
           allow_files: boolean
           max_audio_seconds: number | null
           max_video_seconds: number | null
+          status: PublishStatus
+          content: Json
           created_at: string
           updated_at: string
         }
@@ -319,6 +321,8 @@ export type Database = {
           allow_files?: boolean
           max_audio_seconds?: number | null
           max_video_seconds?: number | null
+          status?: PublishStatus
+          content?: Json
         }
         Update: {
           title?: string
@@ -328,6 +332,8 @@ export type Database = {
           allow_audio?: boolean
           allow_video?: boolean
           max_audio_seconds?: number | null
+          status?: PublishStatus
+          content?: Json
         }
         Relationships: EmptyRelationships
       }

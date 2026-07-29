@@ -22,9 +22,9 @@ export function FlashcardStudyClient({ cards }: { cards: Card[] }) {
         cards={cards}
         title="Study deck"
         mode="student"
-        onRate={(cardId, rating) => {
+        onRate={async (cardId, rating) => {
           const card = cards.find((c) => c.id === cardId)
-          void rateVocabularyCardAction({
+          await rateVocabularyCardAction({
             vocabularyId: cardId,
             rating,
             difficultyWeight: card?.difficultyWeight ?? 1,

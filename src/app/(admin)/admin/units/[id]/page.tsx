@@ -65,6 +65,7 @@ export default async function UnitDetailPage({ params }: Props) {
         description={unit.subtitle || unit.description || undefined}
         actions={[
           { label: 'Back to level', href: `/admin/levels/${unit.level_id}`, variant: 'outline' },
+          { label: 'Unit vocabulary', href: `/admin/units/${id}/vocabulary`, variant: 'outline' },
           { label: 'Quiz editor', href: `/admin/units/${id}/quiz`, variant: 'outline' },
         ]}
       />
@@ -95,6 +96,11 @@ export default async function UnitDetailPage({ params }: Props) {
       </div>
 
       <SectionCard title="Unit details" className="mb-6">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/admin/units/${id}/vocabulary` as '/'}>Manage vocabulary</Link>
+          </Button>
+        </div>
         <form action={updateUnitAction} className="grid gap-3 sm:grid-cols-2">
           <input type="hidden" name="id" value={id} />
           <div className="sm:col-span-2">

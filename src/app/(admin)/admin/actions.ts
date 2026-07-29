@@ -697,9 +697,18 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
   const english = String(formData.get('english') ?? '').trim()
   const levelId = String(formData.get('levelId') ?? 'ha')
   const transliteration = String(formData.get('transliteration') ?? '').trim() || null
+  const notes = String(formData.get('notes') ?? '').trim() || null
   const audioSlow = String(formData.get('audioSlow') ?? '').trim() || null
   const audioNormal = String(formData.get('audioNormal') ?? '').trim() || null
   const audioNatural = String(formData.get('audioNatural') ?? '').trim() || null
+  const isCore = String(formData.get('isCore') ?? '') === 'on'
+  const unitIds = formData
+    .getAll('unitIds')
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+  const primaryUnitId = String(formData.get('unitId') ?? '').trim()
+  if (primaryUnitId && !unitIds.includes(primaryUnitId)) unitIds.push(primaryUnitId)
+
   if (!amharic || !english) return { ok: false, error: 'Amharic and English are required' }
 
   const db = await createAdminDb()
@@ -710,6 +719,7 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
       english,
       level_id: levelId,
       transliteration,
+      notes,
       audio_slow_path: audioSlow,
       audio_normal_path: audioNormal,
       audio_natural_path: audioNatural,
@@ -719,24 +729,49 @@ export async function createVocabularyAction(formData: FormData): Promise<Action
 
   if (error) return { ok: false, error: error.message }
 
+  if (unitIds.length > 0) {
+    const { count } = await db
+      .from('unit_vocabulary')
+      .select('vocabulary_id', { count: 'exact', head: true })
+      .eq('unit_id', unitIds[0])
+
+    const { error: linkError } = await db.from('unit_vocabulary').insert(
+      unitIds.map((unitId, index) => ({
+        unit_id: unitId,
+        vocabulary_id: item.id,
+        sort_order: (count ?? 0) + index,
+        is_core: isCore,
+      })),
+    )
+    if (linkError) {
+      console.error('[createVocabulary] unit link failed', linkError)
+      return { ok: false, error: linkError.message }
+    }
+  }
+
   await writeAudit({
     actorId: user.id,
     actorRole: profile.role,
     action: 'vocabulary.create',
     entityType: 'vocabulary_item',
     entityId: item.id,
-    metadata: { amharic, english, levelId },
+    metadata: { amharic, english, levelId, unitIds },
   })
 
   revalidateCurriculum()
   revalidatePath('/admin/vocabulary')
   revalidatePath('/vocabulary')
   revalidatePath('/levels')
+  for (const unitId of unitIds) {
+    revalidatePath(`/admin/units/${unitId}`)
+    revalidatePath(`/admin/units/${unitId}/vocabulary`)
+  }
   return { ok: true, id: item.id }
 }
 
 export async function createVocabularyFormAction(formData: FormData): Promise<void> {
-  await createVocabularyAction(formData)
+  const result = await createVocabularyAction(formData)
+  if (!result.ok) throw new Error(result.error ?? 'Could not create vocabulary')
 }
 
 export async function createBlogPostFormAction(formData: FormData): Promise<void> {

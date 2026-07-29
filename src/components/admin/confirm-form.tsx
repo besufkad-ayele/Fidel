@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { Children, cloneElement, isValidElement, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +28,18 @@ export function ConfirmForm({
 }: ConfirmFormProps) {
   const [pending, startTransition] = useTransition()
 
+  const childButtons = children
+    ? Children.map(children, (child) => {
+        if (!isValidElement<{ disabled?: boolean; children?: React.ReactNode }>(child)) return child
+        const prevDisabled = Boolean(child.props.disabled)
+        const labelNode = child.props.children
+        return cloneElement(child, {
+          disabled: disabled || pending || prevDisabled,
+          children: pending ? 'Working…' : labelNode,
+        })
+      })
+    : null
+
   return (
     <form
       className={cn(className)}
@@ -38,7 +50,7 @@ export function ConfirmForm({
         })
       }}
     >
-      {children ?? (
+      {childButtons ?? (
         <Button type="submit" variant={variant} size={size} disabled={disabled || pending}>
           {pending ? 'Working…' : label}
         </Button>

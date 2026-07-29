@@ -429,6 +429,11 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
   const audioSlow = String(formData.get('audioSlow') ?? '').trim() || null
   const audioNormal = String(formData.get('audioNormal') ?? '').trim() || null
   const audioNatural = String(formData.get('audioNatural') ?? '').trim() || null
+  const unitIds = formData
+    .getAll('unitIds')
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+  const syncUnits = String(formData.get('syncUnits') ?? '') === '1'
 
   if (!id || !amharic || !english) return
 
@@ -450,7 +455,33 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
 
   if (error) throw new Error(error.message)
 
-  await audit('vocabulary.update', 'vocabulary_item', id, { amharic, english })
+  if (syncUnits) {
+    const { data: existing } = await db
+      .from('unit_vocabulary')
+      .select('unit_id')
+      .eq('vocabulary_id', id)
+    const previous = (existing ?? []).map((r: { unit_id: string }) => r.unit_id)
+
+    await db.from('unit_vocabulary').delete().eq('vocabulary_id', id)
+    if (unitIds.length > 0) {
+      const { error: linkError } = await db.from('unit_vocabulary').insert(
+        unitIds.map((unitId, index) => ({
+          unit_id: unitId,
+          vocabulary_id: id,
+          sort_order: index,
+          is_core: false,
+        })),
+      )
+      if (linkError) throw new Error(linkError.message)
+    }
+
+    for (const unitId of new Set([...previous, ...unitIds])) {
+      revalidatePath(`/admin/units/${unitId}`)
+      revalidatePath(`/admin/units/${unitId}/vocabulary`)
+    }
+  }
+
+  await audit('vocabulary.update', 'vocabulary_item', id, { amharic, english, unitIds: syncUnits ? unitIds : undefined })
   revalidateCurriculum()
   revalidatePath('/admin/vocabulary')
   revalidatePath('/vocabulary')
@@ -460,6 +491,12 @@ export async function updateVocabularyAction(formData: FormData): Promise<void> 
 export async function deleteVocabularyAction(id: string): Promise<void> {
   await requireRole('admin')
   const db = await createAdminDb()
+
+  const { data: links } = await db
+    .from('unit_vocabulary')
+    .select('unit_id')
+    .eq('vocabulary_id', id)
+
   const { error } = await db.from('vocabulary_items').delete().eq('id', id)
   if (error) throw new Error(error.message)
 
@@ -468,6 +505,84 @@ export async function deleteVocabularyAction(id: string): Promise<void> {
   revalidatePath('/admin/vocabulary')
   revalidatePath('/vocabulary')
   revalidatePath('/levels')
+  for (const row of links ?? []) {
+    revalidatePath(`/admin/units/${row.unit_id}`)
+    revalidatePath(`/admin/units/${row.unit_id}/vocabulary`)
+  }
+}
+
+export async function assignVocabularyToUnitAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const unitId = String(formData.get('unitId') ?? '').trim()
+  const vocabularyIds = formData
+    .getAll('vocabularyIds')
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+  const isCore = String(formData.get('isCore') ?? '') === 'on'
+  if (!unitId || vocabularyIds.length === 0) return
+
+  const db = await createAdminDb()
+  const { count } = await db
+    .from('unit_vocabulary')
+    .select('vocabulary_id', { count: 'exact', head: true })
+    .eq('unit_id', unitId)
+
+  const rows = vocabularyIds.map((vocabularyId, index) => ({
+    unit_id: unitId,
+    vocabulary_id: vocabularyId,
+    sort_order: (count ?? 0) + index,
+    is_core: isCore,
+  }))
+
+  const { error } = await db.from('unit_vocabulary').upsert(rows, {
+    onConflict: 'unit_id,vocabulary_id',
+  })
+  if (error) throw new Error(error.message)
+
+  await audit('vocabulary.assign_unit', 'unit', unitId, { vocabularyIds })
+  revalidateCurriculum()
+  revalidatePath(`/admin/units/${unitId}`)
+  revalidatePath(`/admin/units/${unitId}/vocabulary`)
+  revalidatePath('/admin/vocabulary')
+}
+
+export async function unassignVocabularyFromUnitAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const unitId = String(formData.get('unitId') ?? '').trim()
+  const vocabularyId = String(formData.get('vocabularyId') ?? '').trim()
+  if (!unitId || !vocabularyId) return
+
+  const db = await createAdminDb()
+  const { error } = await db
+    .from('unit_vocabulary')
+    .delete()
+    .eq('unit_id', unitId)
+    .eq('vocabulary_id', vocabularyId)
+  if (error) throw new Error(error.message)
+
+  await audit('vocabulary.unassign_unit', 'unit', unitId, { vocabularyId })
+  revalidateCurriculum()
+  revalidatePath(`/admin/units/${unitId}`)
+  revalidatePath(`/admin/units/${unitId}/vocabulary`)
+  revalidatePath('/admin/vocabulary')
+}
+
+export async function setVocabularyUnitCoreAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const unitId = String(formData.get('unitId') ?? '').trim()
+  const vocabularyId = String(formData.get('vocabularyId') ?? '').trim()
+  const isCore = String(formData.get('isCore') ?? '') === 'on'
+  if (!unitId || !vocabularyId) return
+
+  const db = await createAdminDb()
+  const { error } = await db
+    .from('unit_vocabulary')
+    .update({ is_core: isCore })
+    .eq('unit_id', unitId)
+    .eq('vocabulary_id', vocabularyId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/units/${unitId}/vocabulary`)
 }
 
 /* ─── Blog ─────────────────────────────────────────────────────────── */

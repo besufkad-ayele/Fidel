@@ -18,9 +18,16 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import { GripVertical, Plus, Trash2, ChevronUp, ChevronDown, FileUp, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { upsertPartAction } from '@/app/(admin)/admin/content-actions'
+import {
+  deleteHomeworkAssignmentAction,
+  resetHomeworkContentAction,
+  setHomeworkStatusAction,
+  upsertHomeworkContentAction,
+} from '@/app/(admin)/admin/homework-actions'
+import { uploadAdminHomeworkFileAction } from '@/app/(admin)/admin/media-upload-actions'
 import { BlockRenderer } from '@/components/content/block-renderer'
 import { AdminAudioField } from '@/components/admin/admin-audio-field'
 import { AdminImageField } from '@/components/admin/admin-image-field'
@@ -46,6 +53,7 @@ import {
   resetPartContentAction,
   setPartStatusAction,
 } from '@/app/(admin)/admin/content-actions'
+import { lessonMediaPublicUrl } from '@/lib/media/urls'
 import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = [
@@ -65,12 +73,15 @@ type VocabOption = {
   audioSlow?: string | null
   audioNormal?: string | null
   audioNatural?: string | null
+  assignedToUnit?: boolean
 }
 
 type PartContentEditorProps = {
-  unitId: string
-  part: LessonPartKey
-  partSlug: string
+  unitId?: string
+  part?: LessonPartKey
+  partSlug?: string
+  /** When set, editor saves to homework_assignments instead of lesson_parts. */
+  assignmentId?: string
   initialContent: unknown
   initialStatus: string
   partExists: boolean
@@ -79,6 +90,84 @@ type PartContentEditorProps = {
 
 function emptyTableRow(cols: number) {
   return Array.from({ length: cols }, () => '')
+}
+
+function HomeworkAssignmentFileField({
+  fileUrl,
+  fileName,
+  onChange,
+}: {
+  fileUrl: string
+  fileName: string
+  onChange: (next: { fileUrl: string; fileName: string }) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const href = lessonMediaPublicUrl(fileUrl) ?? (fileUrl || null)
+
+  function uploadFile(file: File) {
+    setError(null)
+    const fd = new FormData()
+    fd.set('file', file)
+    fd.set('label', 'assignment')
+    startTransition(async () => {
+      const result = await uploadAdminHomeworkFileAction(fd)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      onChange({ fileUrl: result.path, fileName: result.fileName })
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>Assignment file (PDF or image)</Label>
+      {fileUrl ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-cream-300 bg-white px-3 py-2 text-sm">
+          <FileUp className="size-3.5 text-green-700" />
+          {href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate font-medium text-green-800 underline-offset-2 hover:underline"
+            >
+              {fileName || 'Download file'}
+            </a>
+          ) : (
+            <span className="truncate text-green-800">{fileName || fileUrl}</span>
+          )}
+          <button
+            type="button"
+            className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-danger-500"
+            onClick={() => onChange({ fileUrl: '', fileName: '' })}
+          >
+            <Trash2 className="size-3" />
+            Remove
+          </button>
+        </div>
+      ) : (
+        <Input
+          type="file"
+          accept=".pdf,image/jpeg,image/png,image/webp,image/gif"
+          disabled={pending}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) uploadFile(file)
+            e.target.value = ''
+          }}
+        />
+      )}
+      {pending ? (
+        <p className="inline-flex items-center gap-1.5 text-xs text-green-700">
+          <Loader2 className="size-3.5 animate-spin" />
+          Uploading…
+        </p>
+      ) : null}
+      {error ? <p className="text-xs text-danger-500">{error}</p> : null}
+    </div>
+  )
 }
 
 function TableBlockFields({
@@ -723,21 +812,88 @@ function updateBlock(
   return blocks.map((b) => (b.id === id ? next : b))
 }
 
-function createPracticeTemplateBlocks(): ContentBlock[] {
+function ListReorderControls({
+  index,
+  total,
+  onMove,
+  onRemove,
+  label,
+}: {
+  index: number
+  total: number
+  onMove: (from: number, to: number) => void
+  onRemove?: () => void
+  label: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-xs font-semibold tracking-wide text-green-700 uppercase">{label}</p>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={index === 0}
+          aria-label="Move up"
+          onClick={() => onMove(index, index - 1)}
+        >
+          <ChevronUp className="size-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={index >= total - 1}
+          aria-label="Move down"
+          onClick={() => onMove(index, index + 1)}
+        >
+          <ChevronDown className="size-3.5" />
+        </Button>
+        {onRemove ? (
+          <Button type="button" size="sm" variant="ghost" aria-label="Remove" onClick={onRemove}>
+            <Trash2 className="size-3.5 text-danger-500" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[] {
   const heading = createBlock('heading')
   const intro = createBlock('rich_text')
+  const teacher = createBlock('teacher_note')
+  const objectives = createBlock('objectives')
+  const dialogue = createBlock('dialogue')
+  const vocab = createBlock('vocabulary_set')
+  const example = createBlock('callout')
+  const table = createBlock('table', { tableVariant: 'static' })
   const fill = createBlock('fill_blank')
   const mcq = createBlock('multiple_choice')
   const matching = createBlock('matching_cards')
+  const listening = createBlock('listening_practice')
+  const speaking = createBlock('speaking_task')
   const homework = createBlock('homework_prompt')
+  const refs = createBlock('references')
+  const dos = createBlock('dos_donts')
 
   if (
     heading.type !== 'heading' ||
     intro.type !== 'rich_text' ||
+    teacher.type !== 'teacher_note' ||
+    objectives.type !== 'objectives' ||
+    dialogue.type !== 'dialogue' ||
+    vocab.type !== 'vocabulary_set' ||
+    example.type !== 'callout' ||
+    table.type !== 'table' ||
     fill.type !== 'fill_blank' ||
     mcq.type !== 'multiple_choice' ||
     matching.type !== 'matching_cards' ||
-    homework.type !== 'homework_prompt'
+    listening.type !== 'listening_practice' ||
+    speaking.type !== 'speaking_task' ||
+    homework.type !== 'homework_prompt' ||
+    refs.type !== 'references' ||
+    dos.type !== 'dos_donts'
   ) {
     return []
   }
@@ -745,11 +901,40 @@ function createPracticeTemplateBlocks(): ContentBlock[] {
   return [
     {
       ...heading,
-      text: 'Practice template',
+      text: kind === 'practice' ? 'Practice template' : 'Lesson template',
     },
     {
       ...intro,
-      markdown: 'Instructions: complete all exercises and submit at the end.',
+      markdown:
+        kind === 'practice'
+          ? 'Instructions: complete the teaching sections and exercises below.'
+          : '## Overview\nAdd teaching content, then practice activities as needed.',
+    },
+    {
+      ...teacher,
+      title: 'Teaching note',
+      body: 'Private guidance for instructors (hidden from students unless enabled).',
+      visibleToStudents: false,
+    },
+    { ...objectives, items: ['Objective 1', 'Objective 2'] },
+    {
+      ...example,
+      variant: 'example',
+      title: 'Example',
+      body: 'Show a sample phrase or pattern here.',
+    },
+    dialogue,
+    { ...vocab, title: 'Core vocabulary' },
+    {
+      ...table,
+      title: 'Pattern / grammar',
+      headers: ['Amharic', 'Meaning'],
+      rows: [['', '']],
+    },
+    {
+      ...dos,
+      dos: ['Model the dialogue slowly first'],
+      donts: ['Don’t skip correction of key sounds'],
     },
     {
       ...fill,
@@ -768,7 +953,7 @@ function createPracticeTemplateBlocks(): ContentBlock[] {
         { id: crypto.randomUUID(), text: 'Hello / peace', correct: true },
         { id: crypto.randomUUID(), text: 'Thank you', correct: false },
       ],
-      explanation: 'Great job. ሰላም means hello/peace.',
+      explanation: 'ሰላም means hello/peace.',
     },
     {
       ...matching,
@@ -778,63 +963,43 @@ function createPracticeTemplateBlocks(): ContentBlock[] {
         { left: 'አመሰግናለሁ', right: 'Thank you' },
       ],
     },
+    { ...listening, title: 'Listening practice' },
+    {
+      ...speaking,
+      prompt: 'Record yourself greeting a classmate',
+      instructions: 'Speak clearly. Aim for 15–30 seconds.',
+    },
     {
       ...homework,
       title: 'Homework submission',
-      instructions: 'Upload your worksheet (PDF/photo) or paste a Drive link.',
+      instructions:
+        'Use the assignment link or file. For writing, paste a Drive link or upload a photo (max 1MB). Audio/video: record or upload.',
+      assignmentLink: '',
+      assignmentFileUrl: '',
+      assignmentFileName: '',
       allowText: true,
-      allowAudio: false,
-      allowVideo: false,
-      allowFiles: true,
+      allowAudio: true,
+      allowVideo: true,
+      allowFiles: false,
       allowDriveLink: true,
+      allowImage: true,
+      maxAudioSeconds: 60,
+      maxVideoSeconds: 90,
+      maxImageBytes: 1_048_576,
+    },
+    {
+      ...refs,
+      items: [{ title: 'Optional reading', kind: 'article', url: '', imageUrl: '', note: '' }],
     },
   ]
 }
 
+function createPracticeTemplateBlocks(): ContentBlock[] {
+  return createSharedTemplateBlocks('practice')
+}
+
 function createLessonTemplateBlocks(): ContentBlock[] {
-  const heading = createBlock('heading')
-  const markdown = createBlock('rich_text')
-  const example = createBlock('callout')
-  const objectives = createBlock('objectives')
-  const dialogue = createBlock('dialogue')
-  const table = createBlock('table', { tableVariant: 'static' })
-
-  if (
-    heading.type !== 'heading' ||
-    markdown.type !== 'rich_text' ||
-    example.type !== 'callout' ||
-    objectives.type !== 'objectives' ||
-    dialogue.type !== 'dialogue' ||
-    table.type !== 'table'
-  ) {
-    return []
-  }
-
-  return [
-    { ...heading, text: 'Lesson template' },
-    {
-      ...markdown,
-      markdown:
-        '## Overview\nAdd your custom markdown here.\n\n- Key point 1\n- Key point 2',
-    },
-    {
-      ...example,
-      variant: 'example',
-      title: 'Example',
-      body: 'Use this block to show sample phrases or sentence patterns.',
-    },
-    {
-      ...objectives,
-      items: ['Objective 1', 'Objective 2'],
-    },
-    dialogue,
-    {
-      ...table,
-      title: 'Grammar / Pattern',
-      headers: ['Pattern', 'Meaning'],
-      rows: [['', '']],
-    },
-  ]
+  return createSharedTemplateBlocks('lesson')
 }
 
 function BlockFields({
@@ -972,7 +1137,12 @@ function BlockFields({
               onChange={(e) =>
                 onChange({
                   ...block,
-                  variant: e.target.value as 'tip' | 'note' | 'warning' | 'example',
+                  variant: e.target.value as
+                    | 'tip'
+                    | 'note'
+                    | 'warning'
+                    | 'example'
+                    | 'teacher',
                 })
               }
             >
@@ -980,6 +1150,7 @@ function BlockFields({
               <option value="note">Note</option>
               <option value="warning">Warning</option>
               <option value="example">Example</option>
+              <option value="teacher">Teacher tip</option>
             </select>
           </div>
           <div>
@@ -998,6 +1169,39 @@ function BlockFields({
               onChange={(e) => onChange({ ...block, body: e.target.value })}
             />
           </div>
+        </>
+      )
+    case 'teacher_note':
+      return (
+        <>
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="Teaching note"
+            />
+          </div>
+          <div>
+            <Label>Guidance</Label>
+            <Textarea
+              className="mt-1.5 min-h-[100px]"
+              value={block.body}
+              onChange={(e) => onChange({ ...block, body: e.target.value })}
+              placeholder="How to teach this section, common mistakes, pacing…"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.visibleToStudents}
+              onChange={(e) =>
+                onChange({ ...block, visibleToStudents: e.target.checked })
+              }
+            />
+            Also show to students
+          </label>
         </>
       )
     case 'dos_donts':
@@ -1025,7 +1229,27 @@ function BlockFields({
       return (
         <div className="space-y-3">
           {block.items.map((item, i) => (
-            <div key={i} className="rounded-lg border border-cream-200 p-3">
+            <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+              <ListReorderControls
+                index={i}
+                total={block.items.length}
+                label={`Framing ${i + 1}`}
+                onMove={(from, to) => {
+                  if (to < 0 || to >= block.items.length) return
+                  const items = [...block.items]
+                  ;[items[from], items[to]] = [items[to], items[from]]
+                  onChange({ ...block, items })
+                }}
+                onRemove={
+                  block.items.length > 1
+                    ? () =>
+                        onChange({
+                          ...block,
+                          items: block.items.filter((_, idx) => idx !== i),
+                        })
+                    : undefined
+                }
+              />
               <Label>Persona</Label>
               <select
                 className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -1111,6 +1335,24 @@ function BlockFields({
             <Label>Questions</Label>
             {block.items.map((item, i) => (
               <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.items.length}
+                  label={`Question ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.items.length) return
+                    onChange({ ...block, items: arrayMove(block.items, from, to) })
+                  }}
+                  onRemove={
+                    block.items.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            items: block.items.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
                 <Input
                   placeholder="Question"
                   value={item.question}
@@ -1129,20 +1371,6 @@ function BlockFields({
                     onChange({ ...block, items })
                   }}
                 />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={block.items.length <= 1}
-                  onClick={() =>
-                    onChange({
-                      ...block,
-                      items: block.items.filter((_, idx) => idx !== i),
-                    })
-                  }
-                >
-                  Remove question
-                </Button>
               </div>
             ))}
             <Button
@@ -1299,13 +1527,47 @@ function BlockFields({
       )
     case 'objectives':
       return (
-        <div>
-          <Label>Objectives (one per line)</Label>
-          <Textarea
-            className="mt-1.5"
-            value={block.items.join('\n')}
-            onChange={(e) => onChange({ ...block, items: e.target.value.split('\n') })}
-          />
+        <div className="space-y-3">
+          <Label>Objectives</Label>
+          {block.items.map((item, i) => (
+            <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+              <ListReorderControls
+                index={i}
+                total={block.items.length}
+                label={`Objective ${i + 1}`}
+                onMove={(from, to) => {
+                  if (to < 0 || to >= block.items.length) return
+                  onChange({ ...block, items: arrayMove(block.items, from, to) })
+                }}
+                onRemove={
+                  block.items.length > 1
+                    ? () =>
+                        onChange({
+                          ...block,
+                          items: block.items.filter((_, idx) => idx !== i),
+                        })
+                    : undefined
+                }
+              />
+              <Input
+                value={item}
+                onChange={(e) => {
+                  const items = [...block.items]
+                  items[i] = e.target.value
+                  onChange({ ...block, items })
+                }}
+                placeholder="Learners will be able to…"
+              />
+            </div>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onChange({ ...block, items: [...block.items, ''] })}
+          >
+            Add objective
+          </Button>
         </div>
       )
     case 'dialogue':
@@ -1342,9 +1604,14 @@ function BlockFields({
           ) : null}
           <div>
             <Label>Link vocabulary</Label>
-            <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-md border border-cream-300 p-2">
+            <p className="mt-1 text-xs text-muted-foreground">
+              Unit-assigned words appear first. Manage assignments on the unit vocabulary page.
+            </p>
+            <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto rounded-md border border-cream-300 p-2">
               {vocabularyOptions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No vocabulary yet. Add words first.</p>
+                <p className="text-xs text-muted-foreground">
+                  No vocabulary yet. Create or assign words for this unit first.
+                </p>
               ) : (
                 vocabularyOptions.map((v) => {
                   const checked = block.vocabularyIds.includes(v.id)
@@ -1363,6 +1630,15 @@ function BlockFields({
                       />
                       <span className="font-ethiopic">{v.amharic}</span>
                       <span className="text-muted-foreground">— {v.english}</span>
+                      {v.assignedToUnit ? (
+                        <span className="rounded bg-green-100 px-1 text-[10px] font-semibold text-green-800 uppercase">
+                          unit
+                        </span>
+                      ) : (
+                        <span className="rounded bg-cream-200 px-1 text-[10px] font-semibold text-muted-foreground uppercase">
+                          level
+                        </span>
+                      )}
                       {hasAudio ? (
                         <span className="rounded bg-gold-100 px-1 text-[10px] font-semibold text-gold-800 uppercase">
                           audio
@@ -1490,29 +1766,49 @@ function BlockFields({
           <div className="space-y-2">
             <Label>Options</Label>
             {block.options.map((opt, i) => (
-              <div key={opt.id} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`correct-${block.id}`}
-                  checked={opt.correct}
-                  onChange={() =>
-                    onChange({
-                      ...block,
-                      options: block.options.map((o, j) => ({
-                        ...o,
-                        correct: j === i,
-                      })),
-                    })
+              <div key={opt.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.options.length}
+                  label={`Option ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.options.length) return
+                    onChange({ ...block, options: arrayMove(block.options, from, to) })
+                  }}
+                  onRemove={
+                    block.options.length > 2
+                      ? () =>
+                          onChange({
+                            ...block,
+                            options: block.options.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
                   }
                 />
-                <Input
-                  value={opt.text}
-                  onChange={(e) => {
-                    const options = [...block.options]
-                    options[i] = { ...opt, text: e.target.value }
-                    onChange({ ...block, options })
-                  }}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`correct-${block.id}`}
+                    checked={opt.correct}
+                    onChange={() =>
+                      onChange({
+                        ...block,
+                        options: block.options.map((o, j) => ({
+                          ...o,
+                          correct: j === i,
+                        })),
+                      })
+                    }
+                  />
+                  <Input
+                    value={opt.text}
+                    onChange={(e) => {
+                      const options = [...block.options]
+                      options[i] = { ...opt, text: e.target.value }
+                      onChange({ ...block, options })
+                    }}
+                  />
+                </div>
               </div>
             ))}
             <Button
@@ -1554,24 +1850,63 @@ function BlockFields({
               onChange={(e) => onChange({ ...block, prompt: e.target.value })}
             />
           </div>
-          <div>
-            <Label>Pairs (left | right per line)</Label>
-            <Textarea
-              className="mt-1.5 font-mono text-xs"
-              value={block.pairs.map((p) => `${p.left} | ${p.right}`).join('\n')}
-              onChange={(e) =>
+          <div className="space-y-2">
+            <Label>Pairs</Label>
+            {block.pairs.map((pair, i) => (
+              <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.pairs.length}
+                  label={`Pair ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.pairs.length) return
+                    onChange({ ...block, pairs: arrayMove(block.pairs, from, to) })
+                  }}
+                  onRemove={
+                    block.pairs.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            pairs: block.pairs.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    placeholder="Left"
+                    value={pair.left}
+                    onChange={(e) => {
+                      const pairs = [...block.pairs]
+                      pairs[i] = { ...pair, left: e.target.value }
+                      onChange({ ...block, pairs })
+                    }}
+                  />
+                  <Input
+                    placeholder="Right"
+                    value={pair.right}
+                    onChange={(e) => {
+                      const pairs = [...block.pairs]
+                      pairs[i] = { ...pair, right: e.target.value }
+                      onChange({ ...block, pairs })
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
                 onChange({
                   ...block,
-                  pairs: e.target.value
-                    .split('\n')
-                    .filter(Boolean)
-                    .map((line) => {
-                      const [left, ...rest] = line.split('|')
-                      return { left: left.trim(), right: rest.join('|').trim() }
-                    }),
+                  pairs: [...block.pairs, { left: '', right: '' }],
                 })
               }
-            />
+            >
+              Add pair
+            </Button>
           </div>
         </>
       )
@@ -1649,14 +1984,43 @@ function BlockFields({
               onChange={(e) => onChange({ ...block, instructions: e.target.value })}
             />
           </div>
+
+          <div className="space-y-2 rounded-lg border border-cream-300 bg-cream-50 p-3">
+            <p className="text-xs font-semibold tracking-wide text-gold-700 uppercase">
+              Assignment materials
+            </p>
+            <div>
+              <Label>Assignment link</Label>
+              <Input
+                className="mt-1.5"
+                type="url"
+                placeholder="https://… (Drive, worksheet, etc.)"
+                value={block.assignmentLink ?? ''}
+                onChange={(e) => onChange({ ...block, assignmentLink: e.target.value })}
+              />
+            </div>
+            <HomeworkAssignmentFileField
+              fileUrl={block.assignmentFileUrl ?? ''}
+              fileName={block.assignmentFileName ?? ''}
+              onChange={({ fileUrl, fileName }) =>
+                onChange({
+                  ...block,
+                  assignmentFileUrl: fileUrl,
+                  assignmentFileName: fileName,
+                })
+              }
+            />
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-2">
             {(
               [
-                ['allowText', 'Allow text'],
-                ['allowAudio', 'Allow audio'],
-                ['allowVideo', 'Allow video'],
-                ['allowFiles', 'Allow PDF/photo upload'],
-                ['allowDriveLink', 'Allow Drive link'],
+                ['allowText', 'Allow text answer'],
+                ['allowAudio', 'Allow audio (record / upload)'],
+                ['allowVideo', 'Allow video (record / upload)'],
+                ['allowDriveLink', 'Writing: Drive link'],
+                ['allowImage', 'Writing: image ≤1MB'],
+                ['allowFiles', 'Allow PDF upload (student)'],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-sm">
@@ -1669,7 +2033,7 @@ function BlockFields({
               </label>
             ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <Label>Max audio seconds</Label>
               <Input
@@ -1686,11 +2050,26 @@ function BlockFields({
               <Input
                 type="number"
                 className="mt-1.5"
-                value={block.maxVideoSeconds ?? 60}
+                value={block.maxVideoSeconds ?? 90}
                 onChange={(e) =>
-                  onChange({ ...block, maxVideoSeconds: Number(e.target.value) || 60 })
+                  onChange({ ...block, maxVideoSeconds: Number(e.target.value) || 90 })
                 }
               />
+            </div>
+            <div>
+              <Label>Max image (bytes)</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                value={block.maxImageBytes ?? 1_048_576}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    maxImageBytes: Number(e.target.value) || 1_048_576,
+                  })
+                }
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">Default 1048576 = 1MB</p>
             </div>
           </div>
         </>
@@ -1704,13 +2083,16 @@ function BlockFields({
 
 export function PartContentEditor({
   unitId,
-  part,
+  part: partProp,
   partSlug,
+  assignmentId,
   initialContent,
   initialStatus,
   partExists,
   vocabularyOptions,
 }: PartContentEditorProps) {
+  const isHomework = Boolean(assignmentId)
+  const part: LessonPartKey = partProp ?? 'practice'
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState(initialStatus)
@@ -1728,10 +2110,12 @@ export function PartContentEditor({
 
   const catalog = useMemo(
     () =>
-      BLOCK_CATALOG.filter(
-        (item) => item.parts === 'all' || item.parts.includes(part),
-      ),
-    [part],
+      isHomework
+        ? BLOCK_CATALOG
+        : BLOCK_CATALOG.filter(
+            (item) => item.parts === 'all' || item.parts.includes(part),
+          ),
+    [isHomework, part],
   )
 
   const vocabLookup = useMemo(() => {
@@ -1771,13 +2155,25 @@ export function PartContentEditor({
 
     startTransition(async () => {
       const fd = new FormData()
-      fd.set('unitId', unitId)
-      fd.set('part', part)
       fd.set('status', nextStatus)
       fd.set('content', JSON.stringify(parsed.data))
-      const result = await upsertPartAction(fd)
-      if (!result.ok) {
-        setError(result.error ?? 'Save failed')
+      fd.set('title', parsed.data.title ?? '')
+
+      const result = isHomework && assignmentId
+        ? (() => {
+            fd.set('assignmentId', assignmentId)
+            return upsertHomeworkContentAction(fd)
+          })()
+        : (() => {
+            if (!unitId) return Promise.resolve({ ok: false as const, error: 'Missing unit' })
+            fd.set('unitId', unitId)
+            fd.set('part', part)
+            return upsertPartAction(fd)
+          })()
+
+      const resolved = await result
+      if (!resolved.ok) {
+        setError(resolved.error ?? 'Save failed')
         return
       }
       setStatus(nextStatus)
@@ -1818,7 +2214,11 @@ export function PartContentEditor({
         {status === 'published' ? (
           <form
             action={async () => {
-              await setPartStatusAction(unitId, part, 'draft')
+              if (isHomework && assignmentId) {
+                await setHomeworkStatusAction(assignmentId, 'draft')
+              } else if (unitId) {
+                await setPartStatusAction(unitId, part, 'draft')
+              }
               setStatus('draft')
               router.refresh()
             }}
@@ -1833,7 +2233,7 @@ export function PartContentEditor({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Part title</Label>
+          <Label>{isHomework ? 'Homework title' : 'Part title'}</Label>
           <Input
             className="mt-1.5"
             value={doc.title ?? ''}
@@ -1858,48 +2258,8 @@ export function PartContentEditor({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg text-green-900">Blocks</h3>
-            <div className="flex items-center gap-2">
-              {doc.part === 'language_lesson' ? (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setDoc((prev) => ({
-                        ...prev,
-                        blocks: [...prev.blocks, ...createLessonTemplateBlocks()],
-                      }))
-                    }
-                  >
-                    Add lesson template
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setDoc((prev) => ({
-                        ...prev,
-                        blocks: [
-                          ...prev.blocks,
-                          {
-                            ...createBlock('callout'),
-                            type: 'callout',
-                            variant: 'example',
-                            title: 'Example',
-                            body: '',
-                          },
-                          createBlock('rich_text'),
-                        ],
-                      }))
-                    }
-                  >
-                    Add example + markdown
-                  </Button>
-                </>
-              ) : null}
-              {doc.part === 'practice' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {doc.part === 'language_lesson' || doc.part === 'practice' || doc.part === 'cultural_insight' ? (
                 <Button
                   type="button"
                   size="sm"
@@ -1907,11 +2267,41 @@ export function PartContentEditor({
                   onClick={() =>
                     setDoc((prev) => ({
                       ...prev,
-                      blocks: [...prev.blocks, ...createPracticeTemplateBlocks()],
+                      blocks: [
+                        ...prev.blocks,
+                        ...createSharedTemplateBlocks(
+                          prev.part === 'practice' ? 'practice' : 'lesson',
+                        ),
+                      ],
                     }))
                   }
                 >
-                  Add practice template
+                  Add full template
+                </Button>
+              ) : null}
+              {doc.part === 'language_lesson' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setDoc((prev) => ({
+                      ...prev,
+                      blocks: [
+                        ...prev.blocks,
+                        {
+                          ...createBlock('callout'),
+                          type: 'callout',
+                          variant: 'example',
+                          title: 'Example',
+                          body: '',
+                        },
+                        createBlock('rich_text'),
+                      ],
+                    }))
+                  }
+                >
+                  Add example + markdown
                 </Button>
               ) : null}
               <Button type="button" size="sm" variant="outline" onClick={() => setShowPalette((v) => !v)}>
@@ -2033,7 +2423,33 @@ export function PartContentEditor({
       {error ? <p className="text-sm text-danger-500">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2 border-t border-cream-300 pt-4">
-        {partExists ? (
+        {isHomework && assignmentId ? (
+          <>
+            <ConfirmForm
+              action={async () => {
+                await resetHomeworkContentAction(assignmentId)
+                setDoc(createEmptyPartContent('practice'))
+                setStatus('draft')
+                router.refresh()
+              }}
+              message="Reset this homework to the starter template?"
+              label="Reset content"
+              variant="outline"
+            />
+            <ConfirmForm
+              action={async () => {
+                await deleteHomeworkAssignmentAction(assignmentId)
+                router.push('/admin/homework' as '/')
+                router.refresh()
+              }}
+              message="Delete this homework assignment?"
+              label="Delete homework"
+            />
+            <p className="w-full text-xs text-muted-foreground">
+              Editor route: /admin/homework/{assignmentId}
+            </p>
+          </>
+        ) : partExists && unitId ? (
           <>
             <ConfirmForm
               action={async () => {
@@ -2055,13 +2471,13 @@ export function PartContentEditor({
               message="Delete this lesson part row?"
               label="Delete part"
             />
+            <p className="w-full text-xs text-muted-foreground">
+              Editor route: /admin/units/{unitId}/parts/{partSlug}
+            </p>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">No part row yet — Save will create it.</p>
         )}
-        <p className="w-full text-xs text-muted-foreground">
-          Editor route: /admin/units/{unitId}/parts/{partSlug}
-        </p>
       </div>
     </div>
   )
