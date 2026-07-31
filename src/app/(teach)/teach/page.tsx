@@ -12,8 +12,13 @@ import {
 import { getTranslations } from 'next-intl/server'
 import { AttentionRow } from '@/components/shared/attention-row'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { getCurrentProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import {
+  teacherApproveSessionAction,
+  teacherCancelSessionAction,
+} from '@/app/(learn)/sessions/actions'
 
 export const metadata: Metadata = { title: 'Today' }
 
@@ -26,13 +31,41 @@ export default async function TeacherTodayPage() {
   const timezone = profile?.timezone || 'Africa/Addis_Ababa'
 
   let studentCount = 0
+  let upcomingSessions: {
+    id: string
+    student_id: string
+    scheduled_at: string
+    status: string
+    student_note: string | null
+    session_notes: string | null
+  }[] = []
+  let studentMap = new Map<string, string>()
   if (profile) {
     const supabase = await createClient()
-    const { count } = await supabase
-      .from('student_teacher_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('teacher_id', profile.id)
+    const [{ count }, sessionsRes] = await Promise.all([
+      supabase
+        .from('student_teacher_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('teacher_id', profile.id),
+      supabase
+        .from('sessions')
+        .select('id, student_id, scheduled_at, status, student_note, session_notes')
+        .eq('teacher_id', profile.id)
+        .in('status', ['scheduled', 'cancelled'])
+        .order('scheduled_at', { ascending: true })
+        .limit(8),
+    ])
     studentCount = count ?? 0
+    upcomingSessions = sessionsRes.data ?? []
+
+    const studentIds = Array.from(new Set(upcomingSessions.map((s) => s.student_id)))
+    if (studentIds.length) {
+      const { data: students } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', studentIds)
+      studentMap = new Map((students ?? []).map((s) => [s.id, s.full_name || s.email]))
+    }
   }
 
   const todayLabel = new Intl.DateTimeFormat(profile?.locale || 'en', {
@@ -125,24 +158,67 @@ export default async function TeacherTodayPage() {
           </div>
 
           <div className="flex flex-col items-center px-6 py-14 text-center">
-            <span className="flex size-16 items-center justify-center rounded-2xl border border-cream-300 bg-cream-100 text-green-600">
-              <CalendarDays className="size-7" strokeWidth={1.5} />
-            </span>
-            <h3 className="mt-5 text-lg font-semibold text-green-700">{t('sessions.emptyTitle')}</h3>
-            <p className="mt-2 max-w-[42ch] text-sm leading-relaxed text-muted-foreground">
-              {t('sessions.emptyBody')}
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              <Button asChild className="bg-green-700 text-cream-50 hover:bg-green-600">
-                <Link href={'/teach/schedule' as '/'}>
-                  {t('sessions.ctaSchedule')}
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="border-cream-400 bg-cream-50">
-                <Link href={'/teach/availability' as '/'}>{t('sessions.ctaAvailability')}</Link>
-              </Button>
-            </div>
+            {upcomingSessions.length === 0 ? (
+              <>
+                <span className="flex size-16 items-center justify-center rounded-2xl border border-cream-300 bg-cream-100 text-green-600">
+                  <CalendarDays className="size-7" strokeWidth={1.5} />
+                </span>
+                <h3 className="mt-5 text-lg font-semibold text-green-700">{t('sessions.emptyTitle')}</h3>
+                <p className="mt-2 max-w-[42ch] text-sm leading-relaxed text-muted-foreground">
+                  {t('sessions.emptyBody')}
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  <Button asChild className="bg-green-700 text-cream-50 hover:bg-green-600">
+                    <Link href={'/teach/schedule' as '/'}>
+                      {t('sessions.ctaSchedule')}
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="border-cream-400 bg-cream-50">
+                    <Link href={'/teach/availability' as '/'}>{t('sessions.ctaAvailability')}</Link>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="w-full space-y-3 text-left">
+                {upcomingSessions.map((session) => (
+                  <div key={session.id} className="rounded-lg border border-cream-300 bg-cream-100/70 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium text-green-700">
+                        {studentMap.get(session.student_id) ?? 'Student'} ·{' '}
+                        {new Date(session.scheduled_at).toLocaleString()}
+                      </p>
+                      <span className="text-xs text-muted-foreground uppercase">{session.status}</span>
+                    </div>
+                    {session.student_note ? (
+                      <p className="mt-1 text-sm text-muted-foreground">Student note: {session.student_note}</p>
+                    ) : null}
+                    {session.session_notes ? (
+                      <p className="mt-1 text-sm text-muted-foreground">Latest note: {session.session_notes}</p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <form action={teacherApproveSessionAction} className="flex items-center gap-2">
+                        <input type="hidden" name="id" value={session.id} />
+                        <Input name="note" placeholder="Approval note" className="h-8 w-32" />
+                        <Button type="submit" size="sm">
+                          Approve
+                        </Button>
+                      </form>
+                      <form action={teacherCancelSessionAction} className="flex items-center gap-2">
+                        <input type="hidden" name="id" value={session.id} />
+                        <Input name="note" placeholder="Cancel reason" className="h-8 w-32" />
+                        <Button type="submit" size="sm" variant="outline">
+                          Cancel
+                        </Button>
+                      </form>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={'/teach/schedule' as '/'}>Propose other time</Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

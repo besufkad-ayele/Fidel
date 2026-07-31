@@ -14,6 +14,8 @@ import {
   Award,
   Newspaper,
   ScrollText,
+  ChartNoAxesCombined,
+  Bell,
 } from 'lucide-react'
 import type { AdminNavGroup } from '@/components/admin/admin-nav'
 
@@ -31,7 +33,10 @@ export type AdminNavGroupWithIcons = {
 export const adminNavGroups: AdminNavGroupWithIcons[] = [
   {
     label: 'Overview',
-    items: [{ href: '/admin', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+    ],
   },
   {
     label: 'People & access',
@@ -40,6 +45,7 @@ export const adminNavGroups: AdminNavGroupWithIcons[] = [
       { href: '/admin/organizations', label: 'Organizations', icon: Building2 },
       { href: '/admin/cohorts', label: 'Cohorts', icon: UsersRound },
       { href: '/admin/entitlements', label: 'Entitlements', icon: KeyRound },
+      { href: '/admin/progress', label: 'Progress', icon: ChartNoAxesCombined },
       { href: '/admin/payments', label: 'Payments', icon: Wallet },
     ],
   },

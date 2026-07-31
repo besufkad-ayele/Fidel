@@ -5,8 +5,17 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { FlashcardStudyClient } from './flashcard-study-client'
 import { vocabAudioPublicUrl } from '@/lib/media/urls'
+import { LEVELS } from '@/lib/constants/brand'
 
 export const metadata: Metadata = { title: 'Flashcards' }
+
+function buildHref(opts: { level?: string; due?: boolean }) {
+  const params = new URLSearchParams()
+  if (opts.level) params.set('level', opts.level)
+  if (opts.due) params.set('due', '1')
+  const q = params.toString()
+  return q ? `/vocabulary/flashcards?${q}` : '/vocabulary/flashcards'
+}
 
 export default async function FlashcardsPage({
   searchParams,
@@ -14,6 +23,7 @@ export default async function FlashcardsPage({
   searchParams: Promise<{ level?: string; due?: string }>
 }) {
   const sp = await searchParams
+  const dueOnly = sp.due === '1'
   const supabase = await createClient()
   const {
     data: { user },
@@ -41,30 +51,31 @@ export default async function FlashcardsPage({
   const reviewMap = new Map((reviews ?? []).map((r) => [r.vocabulary_id, r]))
   const now = Date.now()
 
-  const cards = (words ?? [])
-    .map((w) => {
-      const review = reviewMap.get(w.id)
-      const due = !review || new Date(review.next_review_at).getTime() <= now
-      return {
-        id: w.id,
-        front: w.amharic,
-        back: w.english,
-        transliteration: w.transliteration ?? undefined,
-        english: w.english,
-        audio: {
-          slow: vocabAudioPublicUrl(w.audio_slow_path),
-          normal: vocabAudioPublicUrl(w.audio_normal_path),
-          natural: vocabAudioPublicUrl(w.audio_natural_path),
-        },
-        difficultyWeight: w.difficulty_weight ?? 1,
-        due,
-        box: review?.box ?? 1,
-      }
-    })
-    .filter((c) => (sp.due === '1' ? c.due : true))
+  const prepared = (words ?? []).map((w) => {
+    const review = reviewMap.get(w.id)
+    const due = !review || new Date(review.next_review_at).getTime() <= now
+    return {
+      id: w.id,
+      front: w.amharic,
+      back: w.english,
+      transliteration: w.transliteration ?? undefined,
+      english: w.english,
+      audio: {
+        slow: vocabAudioPublicUrl(w.audio_slow_path) ?? undefined,
+        normal: vocabAudioPublicUrl(w.audio_normal_path) ?? undefined,
+        natural: vocabAudioPublicUrl(w.audio_natural_path) ?? undefined,
+      },
+      difficultyWeight: w.difficulty_weight ?? 1,
+      due,
+      box: review?.box ?? 1,
+    }
+  })
 
-  // Harder / lower-box cards first when due-only
-  cards.sort((a, b) => a.box - b.box || a.difficultyWeight - b.difficultyWeight)
+  const dueCount = prepared.filter((c) => c.due).length
+  const cards = prepared
+    .filter((c) => (dueOnly ? c.due : true))
+    .sort((a, b) => a.box - b.box || a.difficultyWeight - b.difficultyWeight)
+    .map(({ due: _due, box: _box, ...card }) => card)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -75,28 +86,62 @@ export default async function FlashcardsPage({
           </p>
           <h1 className="font-display text-3xl text-green-900">Flashcards</h1>
           <p className="mt-1 text-sm text-green-700">
-            Rate cards Again / Good / Easy. Harder words return sooner.
+            Rate Again / Good / Easy. Harder words return sooner.
+            {dueOnly ? ` Showing ${cards.length} due of ${dueCount}.` : ` ${dueCount} due now.`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href="/vocabulary">Bank</Link>
           </Button>
-          <Button asChild variant={sp.due === '1' ? 'default' : 'outline'} size="sm">
-            <Link href="/vocabulary/flashcards?due=1">Due only</Link>
+          <Button asChild variant={dueOnly ? 'default' : 'outline'} size="sm">
+            <Link href={buildHref({ level: sp.level, due: true })}>Due only</Link>
           </Button>
+          {dueOnly ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={buildHref({ level: sp.level })}>All cards</Link>
+            </Button>
+          ) : null}
         </div>
       </header>
+
+      <form className="flex flex-wrap gap-2">
+        {dueOnly ? <input type="hidden" name="due" value="1" /> : null}
+        <select
+          name="level"
+          defaultValue={sp.level ?? ''}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">All levels</option>
+          {LEVELS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.fidel} · {l.title}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" variant="outline" size="sm">
+          Filter
+        </Button>
+      </form>
 
       {cards.length === 0 ? (
         <div className="rounded-xl border border-dashed border-cream-400 bg-cream-50 p-8 text-center">
           <AmharicText size="xl" className="text-gold-500">
             ሀ
           </AmharicText>
-          <p className="mt-3 font-display text-xl text-green-900">No cards yet</p>
-          <p className="mt-1 text-sm text-green-700">
-            Add vocabulary in admin, then return here to study.
+          <p className="mt-3 font-display text-xl text-green-900">
+            {dueOnly ? 'Nothing due right now' : 'No cards yet'}
           </p>
+          <p className="mt-1 text-sm text-green-700">
+            {dueOnly
+              ? 'Come back later, or study the full bank.'
+              : 'Add vocabulary in admin, then return here to study.'}
+          </p>
+          {dueOnly ? (
+            <Button asChild className="mt-4" variant="outline" size="sm">
+              <Link href={buildHref({ level: sp.level })}>Study all cards</Link>
+            </Button>
+          ) : null}
         </div>
       ) : (
         <FlashcardStudyClient cards={cards} />

@@ -15,6 +15,7 @@ import {
   ScrollText,
   Clock3,
   FileSearch,
+  Bell,
 } from 'lucide-react'
 import { PageHeader } from '@/components/admin/page-header'
 import { KpiCard } from '@/components/admin/kpi-card'

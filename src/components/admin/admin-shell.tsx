@@ -6,6 +6,7 @@ import { AdminNav } from '@/components/admin/admin-nav'
 import { BrandLogo } from '@/components/shared/brand-logo'
 import { adminNavGroups, initialsFromName } from '@/lib/admin/nav'
 import { routes } from '@/lib/auth/routes'
+import { SessionTimeoutGuard } from '@/components/features/auth/session-timeout-guard'
 import type { CurrentProfile } from '@/lib/auth/session'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -21,6 +22,7 @@ import { useState } from 'react'
 type AdminShellProps = {
   profile: CurrentProfile
   children: React.ReactNode
+  pendingNotifications?: number
 }
 
 function BrandMark({
@@ -93,26 +95,43 @@ function UserFooter({ profile }: { profile: CurrentProfile }) {
   )
 }
 
-function SidebarBody({ profile, onNavigate }: { profile: CurrentProfile; onNavigate?: () => void }) {
+function SidebarBody({
+  profile,
+  pendingNotifications = 0,
+  onNavigate,
+}: {
+  profile: CurrentProfile
+  pendingNotifications?: number
+  onNavigate?: () => void
+}) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Logo stays fixed — only nav scrolls when items overflow */}
       <div className="shrink-0 border-b border-sidebar-border px-4 py-4">
         <BrandMark />
       </div>
-      <AdminNav groups={adminNavGroups} onNavigate={onNavigate} />
+      <AdminNav
+        groups={adminNavGroups}
+        onNavigate={onNavigate}
+        badges={{ '/admin/notifications': pendingNotifications }}
+      />
       <UserFooter profile={profile} />
     </div>
   )
 }
 
-export function AdminShell({ profile, children }: AdminShellProps) {
+export function AdminShell({
+  profile,
+  children,
+  pendingNotifications = 0,
+}: AdminShellProps) {
   const [open, setOpen] = useState(false)
 
   return (
     <div className="min-h-dvh bg-cream-100">
+      <SessionTimeoutGuard />
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col overflow-hidden border-r border-green-800 bg-sidebar text-sidebar-foreground xl:w-[264px] lg:flex">
-        <SidebarBody profile={profile} />
+        <SidebarBody profile={profile} pendingNotifications={pendingNotifications} />
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col lg:pl-[240px] xl:pl-[264px]">
@@ -133,7 +152,11 @@ export function AdminShell({ profile, children }: AdminShellProps) {
                   <SheetTitle>Admin navigation</SheetTitle>
                 </SheetHeader>
                 <div className="flex h-full min-h-0 flex-col">
-                  <SidebarBody profile={profile} onNavigate={() => setOpen(false)} />
+                  <SidebarBody
+                    profile={profile}
+                    pendingNotifications={pendingNotifications}
+                    onNavigate={() => setOpen(false)}
+                  />
                 </div>
               </SheetContent>
             </Sheet>

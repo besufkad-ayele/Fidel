@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { AmharicText } from '@/components/shared/amharic-text'
 import { AudioPlayer, type AudioSources } from '@/components/shared/audio-player'
 import { cn } from '@/lib/utils'
 
@@ -12,13 +13,18 @@ export type FlashcardItem = {
   back: string
   transliteration?: string
   english?: string
+  exampleAm?: string
+  exampleEn?: string
   audio?: AudioSources
 }
 
+export type FlashcardRatingEvent = {
+  cardId: string
+  rating: 1 | 2 | 3
+}
+
 type ForcedReview = {
-  /** Keep coming back until Easy, unless the 3 interleaved shows are completed. */
   untilEasy: boolean
-  /** Remaining appearances after Again before Good can graduate the card. */
   remainingShows: number
 }
 
@@ -26,10 +32,13 @@ type InteractiveFlashcardsProps = {
   cards: FlashcardItem[]
   title?: string
   mode?: 'student' | 'preview'
-  onRate?: (cardId: string, rating: 1 | 2 | 3) => void | Promise<void>
+  onSessionComplete?: (events: FlashcardRatingEvent[]) => void | Promise<void>
+  completePending?: boolean
+  completeSaved?: boolean
+  completeError?: string | null
+  onResetSessionState?: () => void
 }
 
-/** Prefer ~3 other cards between repeats; fall back when the queue is short. */
 function insertWithGap(queue: number[], cardIdx: number, preferredGap = 3): number[] {
   if (queue.length === 0) return [cardIdx]
   const gap = Math.min(preferredGap, queue.length)
@@ -43,20 +52,29 @@ export function InteractiveFlashcards({
   cards,
   title = 'Flashcards',
   mode = 'student',
-  onRate,
+  onSessionComplete,
+  completePending = false,
+  completeSaved = false,
+  completeError = null,
+  onResetSessionState,
 }: InteractiveFlashcardsProps) {
+  const cardsKey = useMemo(() => cards.map((c) => c.id).join('|'), [cards])
   const [queue, setQueue] = useState<number[]>(() => cards.map((_, i) => i))
   const [flipped, setFlipped] = useState(false)
   const [forced, setForced] = useState<Record<string, ForcedReview>>({})
   const [stats, setStats] = useState({ again: 0, good: 0, easy: 0 })
-  const [ratingPending, startRating] = useTransition()
+  const [ratingEvents, setRatingEvents] = useState<FlashcardRatingEvent[]>([])
+  const completionTriggeredRef = useRef(false)
 
   useEffect(() => {
     setQueue(cards.map((_, i) => i))
     setFlipped(false)
     setForced({})
     setStats({ again: 0, good: 0, easy: 0 })
-  }, [cards])
+    setRatingEvents([])
+    completionTriggeredRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardsKey])
 
   const currentIdx = queue[0]
   const current = currentIdx !== undefined ? cards[currentIdx] : undefined
@@ -64,6 +82,12 @@ export function InteractiveFlashcards({
   const mastered = Math.max(0, cards.length - remainingUnique)
   const progressPct = cards.length ? Math.round((mastered / cards.length) * 100) : 0
   const done = queue.length === 0
+
+  useEffect(() => {
+    if (!done || !onSessionComplete || completionTriggeredRef.current) return
+    completionTriggeredRef.current = true
+    void onSessionComplete(ratingEvents)
+  }, [done, onSessionComplete, ratingEvents])
 
   function advanceAfterRate(rating: 1 | 2 | 3) {
     if (currentIdx === undefined || !current) return
@@ -73,7 +97,6 @@ export function InteractiveFlashcards({
     const otherCount = rest.length
 
     if (rating === 1) {
-      // Again: always requeue. Prefer 3 cards in between; solo deck cycles itself until Easy.
       setForced((prev) => ({
         ...prev,
         [cardId]: {
@@ -83,12 +106,10 @@ export function InteractiveFlashcards({
       }))
       setQueue(otherCount === 0 ? [currentIdx] : insertWithGap(rest, currentIdx, 3))
       setStats((s) => ({ ...s, again: s.again + 1 }))
-      setFlipped(false)
       return
     }
 
     if (rating === 3) {
-      // Easy: leave the session queue.
       setForced((prev) => {
         const next = { ...prev }
         delete next[cardId]
@@ -96,20 +117,16 @@ export function InteractiveFlashcards({
       })
       setQueue(rest)
       setStats((s) => ({ ...s, easy: s.easy + 1 }))
-      setFlipped(false)
       return
     }
 
-    // Good
     const req = forced[cardId]
     if (req?.untilEasy) {
-      // Solo deck: keep cycling until Easy (no other words to interleave with).
       if (otherCount === 0) {
         setQueue([currentIdx])
       } else {
         const remainingShows = req.remainingShows - 1
         if (remainingShows <= 0) {
-          // Completed at least 3 interleaved reviews after Again — graduate without Easy.
           setForced((prev) => {
             const next = { ...prev }
             delete next[cardId]
@@ -128,16 +145,31 @@ export function InteractiveFlashcards({
       setQueue(rest)
     }
     setStats((s) => ({ ...s, good: s.good + 1 }))
-    setFlipped(false)
   }
 
   function rate(rating: 1 | 2 | 3) {
-    if (!current || ratingPending) return
-    startRating(async () => {
-      await onRate?.(current.id, rating)
-      advanceAfterRate(rating)
-    })
+    if (!current || completePending) return
+    setRatingEvents((prev) => [...prev, { cardId: current.id, rating }])
+    setFlipped(false)
+    advanceAfterRate(rating)
   }
+
+  useEffect(() => {
+    if (done || completePending) return
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setFlipped((f) => !f)
+      } else if (flipped && e.key === '1') rate(1)
+      else if (flipped && e.key === '2') rate(2)
+      else if (flipped && e.key === '3') rate(3)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done, flipped, completePending, current?.id, queue])
 
   if (cards.length === 0) {
     return (
@@ -155,15 +187,26 @@ export function InteractiveFlashcards({
           Again {stats.again} · Good {stats.good} · Easy {stats.easy}
         </p>
         <Progress value={100} className="h-2" />
+        {completePending ? (
+          <p className="text-xs text-green-700">Saving session progress…</p>
+        ) : completeSaved ? (
+          <p className="text-xs text-green-700">Progress saved.</p>
+        ) : completeError ? (
+          <p className="text-xs text-danger-500">{completeError}</p>
+        ) : null}
         <Button
           type="button"
           variant="outline"
           className="border-green-300 bg-white text-green-800 hover:bg-green-50"
+          disabled={completePending}
           onClick={() => {
             setQueue(cards.map((_, i) => i))
             setForced({})
             setStats({ again: 0, good: 0, easy: 0 })
             setFlipped(false)
+            setRatingEvents([])
+            completionTriggeredRef.current = false
+            onResetSessionState?.()
           }}
         >
           Study again
@@ -173,6 +216,8 @@ export function InteractiveFlashcards({
   }
 
   const needsRetry = current ? Boolean(forced[current.id]?.untilEasy) : false
+  const looksAmharic = current ? /[ሀ-፼]/.test(current.front) : false
+  const showAnswer = flipped && !completePending
 
   return (
     <div className="space-y-4">
@@ -193,12 +238,10 @@ export function InteractiveFlashcards({
 
       <Progress value={progressPct} className="h-2" />
 
-      {/* 3D scene */}
       <div
         className="relative mx-auto w-full max-w-lg"
         style={{ perspective: '1400px', perspectiveOrigin: '50% 45%' }}
       >
-        {/* Depth stack behind the active card */}
         {queue.length > 2 ? (
           <div
             aria-hidden
@@ -214,27 +257,29 @@ export function InteractiveFlashcards({
           />
         ) : null}
 
+        {/* key remounts each card face-down so advance never animates through the answer */}
         <button
+          key={current?.id ?? 'card'}
           type="button"
-          onClick={() => setFlipped((v) => !v)}
-          disabled={ratingPending}
-          aria-pressed={flipped}
-          aria-label={flipped ? 'Show front of card' : 'Flip card to reveal answer'}
+          onClick={() => {
+            if (!completePending) setFlipped((v) => !v)
+          }}
+          disabled={completePending}
+          aria-pressed={showAnswer}
+          aria-label={showAnswer ? 'Show front of card' : 'Flip card to reveal answer'}
           className={cn(
             'relative z-[1] block h-[260px] w-full cursor-pointer rounded-2xl border-0 bg-transparent p-0 text-left',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-cream-100',
-            ratingPending && 'pointer-events-none opacity-70',
-            !flipped && !ratingPending && 'transition-[filter] duration-300 hover:brightness-[1.03]',
+            completePending && 'cursor-wait',
+            !showAnswer && !completePending && 'transition-[filter] duration-300 hover:brightness-[1.03]',
           )}
           style={{
             transformStyle: 'preserve-3d',
-            transform: flipped
-              ? 'rotateY(180deg) translateZ(0)'
-              : 'rotateY(0deg) translateZ(0)',
+            transform: showAnswer ? 'rotateY(180deg)' : 'rotateY(0deg)',
             transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
           }}
         >
-          {/* Front — deep green */}
+          {/* Front */}
           <div
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-green-600/50 px-8 py-8 text-center shadow-[0_18px_40px_-12px_rgba(15,32,32,0.55),inset_0_1px_0_rgba(224,186,111,0.25)]"
             style={{
@@ -249,20 +294,33 @@ export function InteractiveFlashcards({
               aria-hidden
               className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold-400/50 to-transparent"
             />
-            <p className="font-amharic text-4xl font-semibold tracking-wide text-cream-50 drop-shadow-sm sm:text-5xl">
-              {current?.front}
-            </p>
+            {looksAmharic ? (
+              <AmharicText size="hero" className="text-cream-50 drop-shadow-sm">
+                {current?.front}
+              </AmharicText>
+            ) : (
+              <p className="text-4xl font-semibold tracking-wide text-cream-50 drop-shadow-sm sm:text-5xl">
+                {current?.front}
+              </p>
+            )}
             {current?.transliteration ? (
               <p className="text-sm text-gold-300/90">{current.transliteration}</p>
             ) : null}
-            <p className="mt-1 text-[11px] font-medium tracking-[0.16em] text-gold-400/80 uppercase">
-              Tap to flip
-            </p>
+            {completePending ? (
+              <p className="mt-1 text-[11px] font-medium tracking-[0.16em] text-gold-300 uppercase">
+                Saving…
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] font-medium tracking-[0.16em] text-gold-400/80 uppercase">
+                Tap to flip
+              </p>
+            )}
           </div>
 
-          {/* Back — cream / gold */}
+          {/* Back — only meaningful when flipped; still in DOM for 3D */}
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/80 px-8 py-8 text-center shadow-[0_18px_40px_-12px_rgba(78,59,30,0.28),inset_0_1px_0_rgba(255,255,255,0.7)]"
+            aria-hidden={!showAnswer}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-gold-300/80 px-8 py-8 text-center shadow-[0_18px_40px_-12px_rgba(78,59,30,0.28),inset_0_1px_0_rgba(255,255,255,0.7)]"
             style={{
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
@@ -279,6 +337,16 @@ export function InteractiveFlashcards({
             {current?.english && current.english !== current.back ? (
               <p className="text-sm text-green-600">{current.english}</p>
             ) : null}
+            {current?.exampleAm || current?.exampleEn ? (
+              <div className="mt-1 max-w-sm space-y-0.5 text-sm text-green-700">
+                {current.exampleAm ? (
+                  <AmharicText size="sm" className="block text-green-800">
+                    {current.exampleAm}
+                  </AmharicText>
+                ) : null}
+                {current.exampleEn ? <p className="italic">{current.exampleEn}</p> : null}
+              </div>
+            ) : null}
             <p className="mt-1 text-[11px] font-medium tracking-[0.16em] text-gold-700/70 uppercase">
               Tap to flip back
             </p>
@@ -286,54 +354,54 @@ export function InteractiveFlashcards({
         </button>
       </div>
 
-      {flipped && current ? (
+      {showAnswer && current ? (
         <div className="mx-auto flex w-full max-w-lg justify-center">
           <AudioPlayer
             sources={current.audio ?? {}}
             variant="inline"
             label="Listen"
             showSpeed
-            speakText={/[ሀ-፼]/.test(current.front) ? current.front : undefined}
+            speakText={looksAmharic ? current.front : undefined}
           />
         </div>
       ) : null}
 
-      {flipped ? (
+      {showAnswer ? (
         <div className="mx-auto grid w-full max-w-lg grid-cols-3 gap-2">
           <Button
             type="button"
             variant="outline"
             className="w-full border-danger-500/30 bg-danger-50 text-danger-500 hover:bg-danger-50/80"
-            disabled={ratingPending}
+            disabled={completePending}
             onClick={() => rate(1)}
           >
-            {ratingPending ? '…' : 'Again'}
+            Again
           </Button>
           <Button
             type="button"
             variant="secondary"
             className="w-full border border-cream-300 bg-cream-100 text-green-800 hover:bg-cream-200"
-            disabled={ratingPending}
+            disabled={completePending}
             onClick={() => rate(2)}
           >
-            {ratingPending ? '…' : 'Good'}
+            Good
           </Button>
           <Button
             type="button"
             className="w-full bg-green-700 text-cream-50 hover:bg-green-600"
-            disabled={ratingPending}
+            disabled={completePending}
             onClick={() => rate(3)}
           >
-            {ratingPending ? '…' : 'Easy'}
+            Easy
           </Button>
         </div>
       ) : (
-        <p className="text-center text-xs text-green-600">Flip the card, then rate how it felt.</p>
+        <p className="text-center text-xs text-green-600">
+          {completePending
+            ? 'Saving session progress…'
+            : 'Flip the card, then rate how it felt. Space flips · 1 Again · 2 Good · 3 Easy'}
+        </p>
       )}
-
-      {ratingPending ? (
-        <p className="text-center text-xs text-green-600">Saving progress…</p>
-      ) : null}
     </div>
   )
 }

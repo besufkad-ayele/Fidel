@@ -3,9 +3,11 @@
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { destinationForProfile } from '@/lib/auth/destination'
 import { homeForRole, isRole } from '@/lib/auth/roles'
 import { routes } from '@/lib/auth/routes'
+import { clearSessionStarted, markSessionStarted } from '@/lib/auth/session-cookies'
 import type { ActionResult } from '@/types/actions'
 import type { Route } from 'next'
 
@@ -44,6 +46,10 @@ export async function signIn(input: unknown): Promise<ActionResult<{ redirectTo:
   }
 
   const supabase = await createClient()
+  // Clear any prior session first so logging in as B while A’s cookies remain
+  // cannot leave the browser stuck on A’s account.
+  await supabase.auth.signOut({ scope: 'local' })
+
   const { data, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
@@ -63,6 +69,14 @@ export async function signIn(input: unknown): Promise<ActionResult<{ redirectTo:
     return { ok: false, error: 'invalidCredentials' }
   }
 
+  // Guard against a mismatched cookie race: session email must match the form.
+  if (data.user.email?.toLowerCase() !== parsed.data.email.toLowerCase()) {
+    await supabase.auth.signOut({ scope: 'local' })
+    return { ok: false, error: 'invalidCredentials' }
+  }
+
+  await markSessionStarted()
+
   const next = safeNext(parsed.data.next)
   const destination = next ?? (await profileDestination(data.user.id, data.user.app_metadata?.role))
 
@@ -71,7 +85,8 @@ export async function signIn(input: unknown): Promise<ActionResult<{ redirectTo:
 
 export async function signOut() {
   const supabase = await createClient()
-  await supabase.auth.signOut()
+  await supabase.auth.signOut({ scope: 'global' })
+  await clearSessionStarted()
   redirect(routes.login)
 }
 
@@ -85,11 +100,36 @@ export async function requestPasswordReset(input: unknown): Promise<ActionResult
     return { ok: false, error: 'validation' }
   }
 
-  const supabase = await createClient()
   // Always return success — do not leak whether the email exists.
-  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?type=recovery`,
-  })
+  // Creates an admin-facing request instead of sending a Supabase recovery email.
+  try {
+    const admin = createAdminClient()
+    const email = parsed.data.email
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('id, email, full_name')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (profile) {
+      const { data: existing } = await admin
+        .from('password_reset_requests')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .eq('status', 'pending')
+        .maybeSingle()
+
+      if (!existing) {
+        await admin.from('password_reset_requests').insert({
+          profile_id: profile.id,
+          email: profile.email,
+          status: 'pending',
+        })
+      }
+    }
+  } catch (err) {
+    console.error('[requestPasswordReset]', err)
+  }
 
   return { ok: true, data: undefined }
 }
@@ -136,5 +176,6 @@ export async function setPassword(input: unknown): Promise<ActionResult<{ redire
     })
     .eq('id', user.id)
 
+  await markSessionStarted()
   redirect(await profileDestination(user.id, user.app_metadata?.role))
 }

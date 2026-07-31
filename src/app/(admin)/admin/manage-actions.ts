@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/auth/guards'
+import { fulfillPasswordResetRequestForProfile } from '@/app/(admin)/admin/notification-actions'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createAdminDb, writeAudit } from '@/lib/admin/db'
 import { createOrganizationSchema } from '@/lib/validation/admin-org'
+import { authConfirmUrl } from '@/lib/site-url'
 import type { ActionResult } from '@/app/(admin)/admin/actions'
 
 function nowIso() {
@@ -379,20 +381,35 @@ export async function updatePersonAction(formData: FormData): Promise<void> {
   await requireRole('admin')
   const id = String(formData.get('id') ?? '')
   const fullName = String(formData.get('fullName') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
   const phone = String(formData.get('phone') ?? '').trim() || null
   const timezone = String(formData.get('timezone') ?? 'Africa/Addis_Ababa').trim()
   const locale = String(formData.get('locale') ?? 'en').trim()
+  const adminTitleRaw = String(formData.get('adminTitle') ?? '').trim()
+  const adminTitle = adminTitleRaw
+    ? (adminTitleRaw as 'super_admin' | 'content_manager' | 'program_coordinator' | 'support')
+    : null
 
-  if (!id || !fullName) return
+  if (!id || !fullName || !email) return
 
   const db = await createAdminDb()
+  const admin = createAdminClient()
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(id, {
+    email,
+    user_metadata: { full_name: fullName },
+  })
+  if (authErr) throw new Error(authErr.message)
+
   const { error } = await db
     .from('profiles')
     .update({
       full_name: fullName,
+      email,
       phone,
       timezone,
       locale,
+      admin_title: adminTitle,
       updated_at: nowIso(),
     })
     .eq('id', id)
@@ -403,6 +420,140 @@ export async function updatePersonAction(formData: FormData): Promise<void> {
   revalidatePath(`/admin/people/${id}`)
   revalidatePath('/admin/people')
   redirect(`/admin/people/${id}`)
+}
+
+export async function updateStudentProfileAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const userId = String(formData.get('userId') ?? '')
+  if (!userId) return
+
+  const preferredName = String(formData.get('preferredName') ?? '').trim() || null
+  const persona = String(formData.get('persona') ?? '').trim() || null
+  const studyIntent = String(formData.get('studyIntent') ?? '').trim() || null
+  const learningGoal = String(formData.get('learningGoal') ?? '').trim() || null
+  const priorExperience = String(formData.get('priorExperience') ?? '').trim() || null
+  const nativeLanguage = String(formData.get('nativeLanguage') ?? '').trim() || null
+  const otherLanguagesRaw = String(formData.get('otherLanguages') ?? '')
+  const country = String(formData.get('country') ?? '').trim().toUpperCase() || null
+  const jobTitle = String(formData.get('jobTitle') ?? '').trim() || null
+  const department = String(formData.get('department') ?? '').trim() || null
+  const preferredDaysRaw = String(formData.get('preferredDays') ?? '')
+  const preferredTimesRaw = String(formData.get('preferredTimes') ?? '')
+
+  const otherLanguages = otherLanguagesRaw
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  const preferredDays = preferredDaysRaw
+    .split(',')
+    .map((v) => Number(v.trim()))
+    .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6)
+  const preferredTimes = preferredTimesRaw
+    .split(',')
+    .map((v) => v.trim())
+    .filter((v) => v === 'morning' || v === 'afternoon' || v === 'evening')
+
+  const db = await createAdminDb()
+  const { error } = await db.from('student_profiles').upsert({
+    user_id: userId,
+    preferred_name: preferredName,
+    persona: (persona as 'diplomat' | 'ngo' | 'tourist' | 'missionary' | 'researcher' | 'diaspora' | 'other') ?? 'other',
+    study_intent: (studyIntent as 'casual' | 'steady' | 'intensive') ?? 'steady',
+    learning_goal: learningGoal,
+    prior_experience:
+      (priorExperience as 'none' | 'few_words' | 'speaks_some' | 'reads_fidel' | 'conversational') ??
+      'none',
+    native_language: nativeLanguage,
+    other_languages: otherLanguages,
+    country,
+    job_title: jobTitle,
+    department,
+    preferred_days: preferredDays,
+    preferred_times: preferredTimes,
+    updated_at: nowIso(),
+  })
+  if (error) throw new Error(error.message)
+
+  await audit('student_profile.update', 'profile', userId, { persona, studyIntent })
+  revalidatePath(`/admin/people/${userId}`)
+}
+
+export async function updateTeacherProfileAction(formData: FormData): Promise<void> {
+  await requireRole('admin')
+  const userId = String(formData.get('userId') ?? '')
+  if (!userId) return
+
+  const headline = String(formData.get('headline') ?? '').trim() || null
+  const bio = String(formData.get('bio') ?? '').trim() || null
+  const yearsExperienceRaw = String(formData.get('yearsExperience') ?? '').trim()
+  const yearsExperience = yearsExperienceRaw ? Number(yearsExperienceRaw) : null
+  const hourlyRateRaw = String(formData.get('hourlyRateCents') ?? '').trim()
+  const hourlyRateCents = hourlyRateRaw ? Number(hourlyRateRaw) : null
+  const languagesSpokenRaw = String(formData.get('languagesSpoken') ?? '')
+  const isAcceptingStudents = String(formData.get('isAcceptingStudents') ?? '') === 'on'
+  const languagesSpoken = languagesSpokenRaw
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+
+  const db = await createAdminDb()
+  const { error } = await db.from('teacher_profiles').upsert({
+    user_id: userId,
+    headline,
+    bio,
+    years_experience: Number.isFinite(yearsExperience) ? yearsExperience : null,
+    hourly_rate_cents: Number.isFinite(hourlyRateCents) ? hourlyRateCents : null,
+    languages_spoken: languagesSpoken,
+    is_accepting_students: isAcceptingStudents,
+    updated_at: nowIso(),
+  })
+  if (error) throw new Error(error.message)
+
+  await audit('teacher_profile.update', 'profile', userId, { isAcceptingStudents })
+  revalidatePath(`/admin/people/${userId}`)
+}
+
+export async function setPersonPasswordAction(formData: FormData): Promise<void> {
+  const { user, profile } = await requireRole('admin')
+  const id = String(formData.get('id') ?? '')
+  const password = String(formData.get('password') ?? '')
+  const confirmPassword = String(formData.get('confirmPassword') ?? '')
+  if (!id) return
+  if (password.length < 8) throw new Error('Password must be at least 8 characters')
+  if (password !== confirmPassword) throw new Error('Passwords do not match')
+
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.updateUserById(id, { password })
+  if (error) throw new Error(error.message)
+
+  await audit('person.set_password', 'profile', id)
+  await fulfillPasswordResetRequestForProfile(id, user.id, profile.role)
+  revalidatePath(`/admin/people/${id}`)
+}
+
+/** Generate a one-time temporary password, set it on the auth user, and return it for the admin to copy. */
+export async function generatePersonPasswordAction(
+  id: string,
+): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  const { user, profile } = await requireRole('admin')
+  if (!id) return { ok: false, error: 'Missing person id' }
+
+  const password = generateTemporaryPassword()
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.updateUserById(id, { password })
+  if (error) return { ok: false, error: error.message }
+
+  await audit('person.generate_password', 'profile', id)
+  await fulfillPasswordResetRequestForProfile(id, user.id, profile.role)
+  revalidatePath(`/admin/people/${id}`)
+  return { ok: true, password }
+}
+
+function generateTemporaryPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
 }
 
 export async function suspendPersonAction(formData: FormData): Promise<void> {
@@ -500,7 +651,7 @@ export async function resendInviteAction(id: string): Promise<void> {
   if (!profile?.email) throw new Error('Person not found')
 
   const admin = createAdminClient()
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/set-password`
+  const redirectTo = authConfirmUrl('invite')
   const { error } = await admin.auth.admin.inviteUserByEmail(profile.email, {
     data: { full_name: profile.full_name },
     redirectTo,
@@ -520,23 +671,23 @@ export async function resendInviteAction(id: string): Promise<void> {
   revalidatePath(`/admin/people/${id}`)
 }
 
-export async function resetPasswordAction(id: string): Promise<void> {
+/**
+ * @deprecated Learners request resets via /forgot-password; admins fulfill from Notifications.
+ * Kept as a no-op redirect helper for any leftover callers.
+ */
+export async function resetPasswordAction(
+  id: string,
+): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   await requireRole('admin')
   const db = await createAdminDb()
   const { data: profile } = await db.from('profiles').select('email').eq('id', id).maybeSingle()
-  if (!profile?.email) throw new Error('Person not found')
+  if (!profile?.email) return { ok: false, error: 'Person not found' }
 
-  const admin = createAdminClient()
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`
-  const link = await admin.auth.admin.generateLink({
-    type: 'recovery',
-    email: profile.email,
-    options: { redirectTo },
-  })
-  if (link.error) throw new Error(link.error.message)
-
-  await audit('person.reset_password', 'profile', id, { email: profile.email })
-  revalidatePath(`/admin/people/${id}`)
+  return {
+    ok: true,
+    message:
+      'Password resets are requested by the user from Forgot password. Set or generate a password here to fulfill the request.',
+  }
 }
 
 export async function deletePersonAction(formData: FormData): Promise<void> {

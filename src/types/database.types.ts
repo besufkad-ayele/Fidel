@@ -6,6 +6,9 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 type PublishStatus = 'draft' | 'in_review' | 'published' | 'archived'
 type LessonPart = 'cultural_insight' | 'language_lesson' | 'practice'
+type PartStatus = 'not_started' | 'in_progress' | 'completed'
+type SelfPacedStatus = 'not_started' | 'in_progress' | 'completed'
+type LiveStatus = 'not_booked' | 'booked' | 'completed' | 'missed'
 
 type EmptyRelationships = []
 
@@ -374,6 +377,86 @@ export type Database = {
         }
         Relationships: EmptyRelationships
       }
+      part_progress: {
+        Row: {
+          id: string
+          student_id: string
+          unit_id: string
+          part: LessonPart
+          status: PartStatus
+          progress_pct: number
+          nudge_dismissed: boolean
+          first_viewed_at: string | null
+          completed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          student_id: string
+          unit_id: string
+          part: LessonPart
+          id?: string
+          status?: PartStatus
+          progress_pct?: number
+          nudge_dismissed?: boolean
+          first_viewed_at?: string | null
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          status?: PartStatus
+          progress_pct?: number
+          nudge_dismissed?: boolean
+          first_viewed_at?: string | null
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: EmptyRelationships
+      }
+      student_unit_progress: {
+        Row: {
+          id: string
+          student_id: string
+          unit_id: string
+          self_paced_status: SelfPacedStatus
+          live_status: LiveStatus
+          best_quiz_percentage: number | null
+          practice_passed: boolean
+          homework_score: number | null
+          live_assessment_score: number | null
+          grade_notes: string | null
+          started_at: string | null
+          completed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          student_id: string
+          unit_id: string
+          id?: string
+          self_paced_status?: SelfPacedStatus
+          live_status?: LiveStatus
+          best_quiz_percentage?: number | null
+          practice_passed?: boolean
+          homework_score?: number | null
+          live_assessment_score?: number | null
+          grade_notes?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          self_paced_status?: SelfPacedStatus
+          live_status?: LiveStatus
+          best_quiz_percentage?: number | null
+          practice_passed?: boolean
+          homework_score?: number | null
+          live_assessment_score?: number | null
+          grade_notes?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: EmptyRelationships
+      }
       blog_posts: {
         Row: {
           id: string
@@ -441,6 +524,98 @@ export type Database = {
         }
         Relationships: EmptyRelationships
       }
+      teacher_availability: {
+        Row: {
+          id: string
+          teacher_id: string
+          weekday: number
+          start_time: string
+          end_time: string
+          timezone: string
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          weekday: number
+          start_time: string
+          end_time: string
+          timezone?: string
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          weekday?: number
+          start_time?: string
+          end_time?: string
+          timezone?: string
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: EmptyRelationships
+      }
+      teacher_time_off: {
+        Row: {
+          id: string
+          teacher_id: string
+          starts_at: string
+          ends_at: string
+          reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          starts_at: string
+          ends_at: string
+          reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          starts_at?: string
+          ends_at?: string
+          reason?: string | null
+          created_at?: string
+        }
+        Relationships: EmptyRelationships
+      }
+      password_reset_requests: {
+        Row: {
+          id: string
+          profile_id: string
+          email: string
+          status: 'pending' | 'fulfilled' | 'dismissed'
+          note: string | null
+          resolved_by: string | null
+          resolved_at: string | null
+          created_at: string
+        }
+        Insert: {
+          profile_id: string
+          email: string
+          id?: string
+          status?: 'pending' | 'fulfilled' | 'dismissed'
+          note?: string | null
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          profile_id?: string
+          email?: string
+          status?: 'pending' | 'fulfilled' | 'dismissed'
+          note?: string | null
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+        }
+        Relationships: EmptyRelationships
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -449,6 +624,7 @@ export type Database = {
       admin_title: 'super_admin' | 'content_manager' | 'program_coordinator' | 'support'
       publish_status: PublishStatus
       lesson_part: LessonPart
+      password_reset_request_status: 'pending' | 'fulfilled' | 'dismissed'
     }
     CompositeTypes: Record<string, never>
   }

@@ -54,6 +54,7 @@ export function InteractiveMatching({
   const [selectedRightId, setSelectedRightId] = useState<string | null>(null)
   const [draggingRightId, setDraggingRightId] = useState<string | null>(null)
   const [checked, setChecked] = useState(false)
+  const [attemptsUsed, setAttemptsUsed] = useState(0)
 
   useEffect(() => {
     const chips: RightChip[] = pairs.map((pair, i) => ({
@@ -66,6 +67,7 @@ export function InteractiveMatching({
     setSelectedLeft(null)
     setSelectedRightId(null)
     setChecked(false)
+    setAttemptsUsed(0)
     // Reset when pair content changes (not on every parent render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairsKey])
@@ -79,6 +81,7 @@ export function InteractiveMatching({
   const usedRightIds = useMemo(() => new Set(Object.values(matches)), [matches])
 
   const locked = checked && mode === 'student'
+  const maxAttempts = Math.max(1, block.maxAttempts ?? 2)
 
   function assign(leftIndex: number, rightId: string) {
     if (locked) return
@@ -130,6 +133,11 @@ export function InteractiveMatching({
     const chip = chipById.get(chipId)
     return acc + (chip?.correctLeftIndex === i ? 1 : 0)
   }, 0)
+  const isPerfect = checked && score === pairs.length
+  const isFinalAttempt = attemptsUsed >= maxAttempts
+  const revealAnswers = isPerfect || isFinalAttempt
+  const canRetry = checked && !isPerfect && attemptsUsed < maxAttempts
+  const canRetake = checked && !isPerfect && isFinalAttempt && (block.allowRetake ?? false)
 
   if (pairs.length === 0) {
     return (
@@ -227,7 +235,7 @@ export function InteractiveMatching({
                   )}
                 </div>
 
-                {checked && isWrong ? (
+                {checked && revealAnswers && isWrong ? (
                   <p className="mt-1.5 text-xs text-green-700">
                     Correct: <TextLabel text={pair.right} />
                   </p>
@@ -276,24 +284,46 @@ export function InteractiveMatching({
           type="button"
           size="sm"
           disabled={!allMatched || checked}
-          onClick={() => setChecked(true)}
-        >
-          Submit &amp; Check
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
           onClick={() => {
-            setMatches({})
-            setSelectedLeft(null)
-            setSelectedRightId(null)
-            setChecked(false)
-            setRightChips((prev) => shuffle(prev))
+            setChecked(true)
+            setAttemptsUsed((n) => n + 1)
           }}
         >
-          Try again
+          Submit &amp; Check ({attemptsUsed}/{maxAttempts})
         </Button>
+        {canRetry ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setMatches({})
+              setSelectedLeft(null)
+              setSelectedRightId(null)
+              setChecked(false)
+              setRightChips((prev) => shuffle(prev))
+            }}
+          >
+            Try final attempt
+          </Button>
+        ) : null}
+        {canRetake ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setMatches({})
+              setSelectedLeft(null)
+              setSelectedRightId(null)
+              setChecked(false)
+              setAttemptsUsed(0)
+              setRightChips((prev) => shuffle(prev))
+            }}
+          >
+            Retake
+          </Button>
+        ) : null}
       </div>
 
       {checked ? (
@@ -306,7 +336,11 @@ export function InteractiveMatching({
           )}
         >
           {score}/{pairs.length} correct
-          {score === pairs.length ? ' — nice work!' : ' — clear wrong ones and try again.'}
+          {score === pairs.length
+            ? ' — nice work!'
+            : revealAnswers
+              ? ' — final attempt reached, answers revealed.'
+              : ' — not final yet, try once more.'}
           {mode === 'preview' ? ' (preview)' : ''}
         </p>
       ) : (

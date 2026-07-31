@@ -1,14 +1,16 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
 import type { z } from 'zod'
 import type { homeworkPromptBlockSchema } from '@/lib/validation/content'
+import { submitHomeworkAction } from '@/lib/actions/homework'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { lessonMediaPublicUrl } from '@/lib/media/urls'
 import { ExternalLink, FileText, ImageIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 type Block = z.infer<typeof homeworkPromptBlockSchema>
 
@@ -20,13 +22,22 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
+async function blobToFile(blob: Blob, name: string): Promise<File> {
+  return new File([blob], name, { type: blob.type || 'application/octet-stream' })
+}
+
 export function HomeworkSubmission({
   block,
   mode = 'student',
+  assignmentId,
+  alreadySubmitted = false,
 }: {
   block: Block
   mode?: 'student' | 'preview'
+  assignmentId?: string
+  alreadySubmitted?: boolean
 }) {
+  const [pending, startTransition] = useTransition()
   const [text, setText] = useState('')
   const [driveLink, setDriveLink] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -38,6 +49,7 @@ export function HomeworkSubmission({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
   const [submitNote, setSubmitNote] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(alreadySubmitted)
 
   const maxImageBytes = block.maxImageBytes ?? DEFAULT_MAX_IMAGE
   const assignmentHref = useMemo(() => {
@@ -73,6 +85,8 @@ export function HomeworkSubmission({
 
   function canSubmit() {
     if (mode === 'preview') return false
+    if (!assignmentId) return false
+    if (pending) return false
     const hasWriting =
       (block.allowText && text.trim().length > 0) ||
       (block.allowDriveLink && driveLink.trim().length > 0) ||
@@ -84,11 +98,53 @@ export function HomeworkSubmission({
   }
 
   function handleSubmit() {
+    if (!assignmentId) {
+      setSubmitNote('This homework form is missing an assignment id.')
+      return
+    }
     if (!canSubmit()) {
       setSubmitNote('Add at least one answer: writing (Drive/image/text), audio, or video.')
       return
     }
-    setSubmitNote('Ready to submit — server save will wire to homework_submissions next.')
+
+    startTransition(async () => {
+      setSubmitNote(null)
+      try {
+        const formData = new FormData()
+        formData.set('assignmentId', assignmentId)
+        if (block.allowText && text.trim()) formData.set('text', text.trim())
+        if (block.allowDriveLink && driveLink.trim()) formData.set('driveLink', driveLink.trim())
+        if (block.allowImage && imageFile) formData.set('image', imageFile)
+        if (block.allowFiles) {
+          for (const pdf of pdfFiles) formData.append('pdf', pdf)
+        }
+        if (block.allowAudio) {
+          if (audioFile) formData.set('audio', audioFile)
+          else if (audioBlob) {
+            formData.set('audio', await blobToFile(audioBlob, 'homework-audio.webm'))
+          }
+        }
+        if (block.allowVideo) {
+          if (videoFile) formData.set('video', videoFile)
+          else if (videoBlob) {
+            formData.set('video', await blobToFile(videoBlob, 'homework-video.webm'))
+          }
+        }
+
+        const result = await submitHomeworkAction(formData)
+        if (!result.ok) {
+          setSubmitNote(result.error)
+          toast.error(result.error)
+          return
+        }
+        setSubmitted(true)
+        setSubmitNote('Submitted — your teacher can review it now.')
+        toast.success('Homework submitted')
+      } catch {
+        setSubmitNote('Could not submit. Try again.')
+        toast.error('Could not submit homework')
+      }
+    })
   }
 
   return (
@@ -150,6 +206,12 @@ export function HomeworkSubmission({
         </div>
       )}
 
+      {submitted ? (
+        <div className="rounded-lg border border-success-500/30 bg-success-50 px-3 py-3 text-sm text-success-600">
+          {submitNote ?? 'You have submitted this homework. You can submit again below if you need to update it.'}
+        </div>
+      ) : null}
+
       {(block.allowText || block.allowDriveLink || block.allowImage || block.allowFiles) && (
         <div className="space-y-3 rounded-lg border border-cream-300 bg-white/70 p-3">
           <p className="text-xs font-semibold tracking-wide text-gold-700 uppercase">
@@ -164,7 +226,7 @@ export function HomeworkSubmission({
               <label className="text-sm font-medium text-green-900">Written response</label>
               <Textarea
                 value={text}
-                disabled={mode === 'preview'}
+                disabled={mode === 'preview' || pending}
                 placeholder="Type your answer…"
                 onChange={(e) => setText(e.target.value)}
               />
@@ -178,7 +240,7 @@ export function HomeworkSubmission({
                 type="url"
                 placeholder="https://drive.google.com/..."
                 value={driveLink}
-                disabled={mode === 'preview'}
+                disabled={mode === 'preview' || pending}
                 onChange={(e) => setDriveLink(e.target.value)}
               />
             </div>
@@ -193,7 +255,7 @@ export function HomeworkSubmission({
               <Input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
-                disabled={mode === 'preview'}
+                disabled={mode === 'preview' || pending}
                 onChange={(e) => onImagePick(e.target.files?.[0])}
               />
               {imageError ? <p className="text-xs text-danger-500">{imageError}</p> : null}
@@ -220,7 +282,7 @@ export function HomeworkSubmission({
                 type="file"
                 accept=".pdf,application/pdf"
                 multiple
-                disabled={mode === 'preview'}
+                disabled={mode === 'preview' || pending}
                 onChange={(e) => setPdfFiles(Array.from(e.target.files ?? []))}
               />
               {pdfFiles.length > 0 ? (
@@ -252,7 +314,7 @@ export function HomeworkSubmission({
             <Input
               type="file"
               accept="audio/*"
-              disabled={mode === 'preview'}
+              disabled={mode === 'preview' || pending}
               onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
             />
             {audioFile ? (
@@ -279,7 +341,7 @@ export function HomeworkSubmission({
             <Input
               type="file"
               accept="video/*"
-              disabled={mode === 'preview'}
+              disabled={mode === 'preview' || pending}
               onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)}
             />
             {videoFile ? (
@@ -292,10 +354,26 @@ export function HomeworkSubmission({
       ) : null}
 
       <div className="pt-1">
-        <Button type="button" size="sm" disabled={!canSubmit()} onClick={handleSubmit}>
-          Submit homework
-        </Button>
-        {submitNote ? <p className="mt-2 text-xs text-green-700">{submitNote}</p> : null}
+        {mode === 'preview' ? (
+          <p className="text-xs text-muted-foreground">Preview mode — submit is disabled.</p>
+        ) : !assignmentId ? (
+          <p className="text-xs text-muted-foreground">
+            Open this assignment from Homework to submit your answers.
+          </p>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canSubmit()}
+            onClick={handleSubmit}
+            aria-busy={pending}
+          >
+            {pending ? 'Submitting…' : submitted ? 'Submit again' : 'Submit homework'}
+          </Button>
+        )}
+        {submitNote && !submitted ? (
+          <p className="mt-2 text-xs text-danger-500">{submitNote}</p>
+        ) : null}
       </div>
     </div>
   )

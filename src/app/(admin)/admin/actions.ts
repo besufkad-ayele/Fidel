@@ -11,6 +11,7 @@ import { createAdminUserSchema } from '@/lib/validation/admin-admin'
 import { createOrganizationSchema } from '@/lib/validation/admin-org'
 import { grantEntitlementSchema } from '@/lib/validation/admin-entitlement'
 import { recordPaymentSchema } from '@/lib/validation/admin-payment'
+import { authConfirmUrl } from '@/lib/site-url'
 
 export type ActionResult = {
   ok: boolean
@@ -47,7 +48,9 @@ async function inviteOrCreate(
   meta: Record<string, unknown> = {},
 ) {
   const admin = createAdminClient()
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/set-password`
+  // Must go through /auth/confirm so the invite code is exchanged for THIS user
+  // (landing on /set-password directly reuses any existing browser session).
+  const redirectTo = authConfirmUrl('invite')
 
   if (sendInvite) {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -109,7 +112,9 @@ export async function createStudentAction(input: unknown): Promise<ActionResult>
         locale: data.locale,
         is_active: !isSuspended,
         invited_at: now,
+        // Password is set by admin — student logs in and goes to the dashboard.
         activated_at: isSuspended ? null : now,
+        welcome_seen_at: isSuspended ? null : now,
         suspended_reason: isSuspended ? 'Created as suspended' : null,
         created_by: user.id,
       })

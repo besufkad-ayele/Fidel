@@ -2,14 +2,23 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { BlockRenderer } from '@/components/content/block-renderer'
+import { CompletePartButton } from '@/components/features/learn/complete-part-button'
 import { PartTabs } from '@/components/features/learn/part-tabs'
 import { Button } from '@/components/ui/button'
+import { getCurrentUser } from '@/lib/auth/session'
 import { getPublishedUnitPartPage, partKeyFromRoute } from '@/lib/data/curriculum'
+import { createClient } from '@/lib/supabase/server'
 
 const NEXT_PART: Record<string, { label: string; route: string } | null> = {
   culture: { label: 'Continue to Language Lesson', route: 'lesson' },
   lesson: { label: 'Continue to Practice', route: 'practice' },
   practice: null,
+}
+
+const COMPLETE_LABEL: Record<string, string> = {
+  culture: 'Mark culture complete',
+  lesson: 'Mark lesson complete',
+  practice: 'Mark practice complete',
 }
 
 export async function UnitPartPage({
@@ -44,6 +53,20 @@ export async function UnitPartPage({
   }
 
   const next = NEXT_PART[partRoute]
+  const user = await getCurrentUser()
+  let alreadyComplete = false
+
+  if (user) {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('part_progress')
+      .select('status')
+      .eq('student_id', user.id)
+      .eq('unit_id', unit.id)
+      .eq('part', partKey)
+      .maybeSingle()
+    alreadyComplete = data?.status === 'completed'
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -53,16 +76,42 @@ export async function UnitPartPage({
         <BlockRenderer content={content} vocabulary={vocabulary} mode="student" />
       </div>
 
-      {next ? (
-        <div className="flex justify-end">
-          <Button asChild>
-            <Link href={`/levels/${levelSlug}/units/${unitSlug}/${next.route}`}>
-              {next.label}
-              <ChevronRight className="ml-1 size-4" />
-            </Link>
-          </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cream-300 bg-cream-50 px-4 py-4 shadow-card">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+            Progress
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {alreadyComplete
+              ? 'This part is saved as complete on your progress.'
+              : partRoute === 'practice'
+                ? 'Finished the drills? Mark practice complete to update your pass/fail status.'
+                : 'Mark this part complete so your teacher and dashboard stay in sync.'}
+          </p>
         </div>
-      ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <CompletePartButton
+            unitId={unit.id}
+            part={partKey}
+            levelSlug={levelSlug}
+            unitSlug={unitSlug}
+            alreadyComplete={alreadyComplete}
+            label={COMPLETE_LABEL[partRoute] ?? 'Mark complete'}
+          />
+          {next ? (
+            <Button asChild variant="outline">
+              <Link href={`/levels/${levelSlug}/units/${unitSlug}/${next.route}` as '/'}>
+                {next.label}
+                <ChevronRight className="ml-1 size-4" />
+              </Link>
+            </Button>
+          ) : alreadyComplete ? (
+            <Button asChild variant="outline">
+              <Link href={'/progress' as '/'}>View progress</Link>
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

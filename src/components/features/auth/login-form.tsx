@@ -30,7 +30,9 @@ export function LoginForm({ next, error }: LoginFormProps) {
       ? t('errors.inactive')
       : error === 'no_account'
         ? t('errors.noAccount')
-        : null
+        : error === 'session_expired'
+          ? t('errors.sessionExpired')
+          : null
 
   return (
     <form

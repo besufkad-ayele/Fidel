@@ -23,6 +23,7 @@ export const contentBlockTypeSchema = z.enum([
   'why_matters',
   'table',
   'fill_blank',
+  'meaning_fill',
   'references',
   'objectives',
   'dialogue',
@@ -127,6 +128,8 @@ export const fillBlankBlockSchema = blockBase.extend({
   type: z.literal('fill_blank'),
   title: z.string().optional(),
   prompt: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
   /** Word / phrase bank shown above the questions */
   wordBank: z.array(z.string()).default([]),
   items: z
@@ -134,6 +137,28 @@ export const fillBlankBlockSchema = blockBase.extend({
       z.object({
         id: z.string().min(1),
         question: z.string(),
+        answer: z.string(),
+      }),
+    )
+    .min(1),
+})
+
+/** English meaning given → pick Amharic (or target) from a word bank. */
+export const meaningFillBlockSchema = blockBase.extend({
+  type: z.literal('meaning_fill'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  /** Words / phrases shown at the top for students to select */
+  wordBank: z.array(z.string()).default([]),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** English (or source) meaning, e.g. "Good morning for a male" */
+        meaning: z.string(),
+        /** Correct word/phrase from the bank */
         answer: z.string(),
       }),
     )
@@ -239,6 +264,8 @@ export const listeningPracticeBlockSchema = blockBase.extend({
 export const matchingCardsBlockSchema = blockBase.extend({
   type: z.literal('matching_cards'),
   prompt: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
   pairs: z.array(
     z.object({
       left: z.string(),
@@ -250,6 +277,8 @@ export const matchingCardsBlockSchema = blockBase.extend({
 export const multipleChoiceBlockSchema = blockBase.extend({
   type: z.literal('multiple_choice'),
   prompt: z.string(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
   options: z.array(
     z.object({
       id: z.string(),
@@ -316,6 +345,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   whyMattersBlockSchema,
   tableBlockSchema,
   fillBlankBlockSchema,
+  meaningFillBlockSchema,
   referencesBlockSchema,
   objectivesBlockSchema,
   dialogueBlockSchema,
@@ -461,6 +491,8 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       id: 'mcq',
       type: 'multiple_choice',
       prompt: 'What does ሰላም mean?',
+      maxAttempts: 2,
+      allowRetake: false,
       options: [
         { id: 'a', text: 'Hello / peace', correct: true },
         { id: 'b', text: 'Goodbye', correct: false },
@@ -473,6 +505,8 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       type: 'fill_blank',
       title: 'Fill in the blank',
       prompt: 'Use a word from the list.',
+      maxAttempts: 2,
+      allowRetake: false,
       wordBank: ['ሰላም', 'ደህና ነኝ', 'አመሰግናለሁ'],
       items: [
         { id: 'f1', question: 'How do you say hello?', answer: 'ሰላም' },
@@ -480,9 +514,24 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       ],
     },
     {
+      id: 'meaning',
+      type: 'meaning_fill',
+      title: 'Match the English meaning',
+      prompt: 'Pick the Amharic phrase that matches each meaning.',
+      maxAttempts: 2,
+      allowRetake: false,
+      wordBank: ['እንደምን አደርክ', 'እንደምን አደርሽ', 'ደህና ነኝ'],
+      items: [
+        { id: 'm1', meaning: 'Good morning for a male', answer: 'እንደምን አደርክ' },
+        { id: 'm2', meaning: 'Good morning for a female', answer: 'እንደምን አደርሽ' },
+      ],
+    },
+    {
       id: 'matching',
       type: 'matching_cards',
       prompt: 'Match the Amharic with English',
+      maxAttempts: 2,
+      allowRetake: false,
       pairs: [
         { left: 'ሰላም', right: 'Hello' },
         { left: 'ደህና ነኝ', right: 'I am fine' },
@@ -640,6 +689,12 @@ export const BLOCK_CATALOG: {
   { type: 'flashcard_revision', label: 'Flashcards', description: 'Revision deck', parts: 'all' },
   { type: 'listening_practice', label: 'Listening practice', description: 'Hear audio and choose the meaning', parts: 'all' },
   { type: 'fill_blank', label: 'Fill in the blank', description: 'Drag words to blanks then submit/check', parts: 'all' },
+  {
+    type: 'meaning_fill',
+    label: 'English meaning → word bank',
+    description: 'Show English meaning; student picks the Amharic from a word list and checks',
+    parts: 'all',
+  },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
@@ -704,9 +759,28 @@ export function createBlock(
         type,
         title: 'Fill in the blank',
         prompt: 'Choose from the list above.',
+        maxAttempts: 2,
+        allowRetake: false,
         wordBank: ['', ''],
         items: [
           { id: crypto.randomUUID(), question: '', answer: '' },
+        ],
+      }
+    case 'meaning_fill':
+      return {
+        id,
+        type,
+        title: 'Match the meaning',
+        prompt: 'Read the English meaning, then pick the matching word from the list.',
+        maxAttempts: 2,
+        allowRetake: false,
+        wordBank: ['እንደምን አደርክ', 'እንደምን አደርሽ', 'ሰላም'],
+        items: [
+          {
+            id: crypto.randomUUID(),
+            meaning: 'Good morning for a male',
+            answer: 'እንደምን አደርክ',
+          },
         ],
       }
     case 'references':
@@ -763,12 +837,21 @@ export function createBlock(
         ],
       }
     case 'matching_cards':
-      return { id, type, prompt: '', pairs: [{ left: '', right: '' }] }
+      return {
+        id,
+        type,
+        prompt: '',
+        maxAttempts: 2,
+        allowRetake: false,
+        pairs: [{ left: '', right: '' }],
+      }
     case 'multiple_choice':
       return {
         id,
         type,
         prompt: '',
+        maxAttempts: 2,
+        allowRetake: false,
         options: [
           { id: crypto.randomUUID(), text: '', correct: true },
           { id: crypto.randomUUID(), text: '', correct: false },

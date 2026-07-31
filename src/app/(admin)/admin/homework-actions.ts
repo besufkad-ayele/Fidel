@@ -141,6 +141,8 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
 
   revalidatePath('/admin/homework')
   revalidatePath(`/admin/homework/${id}`)
+  revalidatePath('/homework')
+  revalidatePath(`/homework/${id}`)
   return { ok: true }
 }
 
@@ -166,6 +168,8 @@ export async function setHomeworkStatusAction(id: string, status: string): Promi
 
   revalidatePath('/admin/homework')
   revalidatePath(`/admin/homework/${id}`)
+  revalidatePath('/homework')
+  revalidatePath(`/homework/${id}`)
 }
 
 export async function resetHomeworkContentAction(id: string): Promise<void> {

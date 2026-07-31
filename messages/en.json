@@ -163,13 +163,71 @@
     "services": {
       "eyebrow": "Our services",
       "title": "One curriculum. Three ways we serve you.",
-      "lead": "Whether you study alone, book a teacher, or need a certificate for protocol - Fidel keeps everything on the same path.",
-      "selfTitle": "Self-paced curriculum",
-      "selfBody": "Unlock units on your schedule. Culture, language, and practice are always available once entitled.",
-      "liveTitle": "Live teacher sessions",
-      "liveBody": "Book coaches who prepare from your progress. No wasted minutes re-teaching what you already practiced.",
-      "certTitle": "Verifiable certificates",
-      "certBody": "Finish a level, pass the exam, receive a PDF with a public code embassies and HR can verify.",
+      "lead": "Whether you study alone, book a teacher, or need a certificate for protocol — Fidel keeps everything on the same path.",
+      "offeringsEyebrow": "What you get",
+      "offeringsTitle": "Services built around real Amharic use.",
+      "offeringsBody": "Self-study, live coaching, and credentials share one curriculum — so every hour compounds.",
+      "self": {
+        "title": "Self-paced curriculum",
+        "body": "Unlock units on your schedule. Culture, language, and practice stay available once you are entitled.",
+        "point1": "Six fidel levels mapped to CEFR bands",
+        "point2": "Culture → language → practice in every unit",
+        "point3": "Interactive exercises with instant feedback",
+        "point4": "Progress that teachers can see before sessions"
+      },
+      "live": {
+        "title": "Live teacher sessions",
+        "body": "Book native coaches who prepare from your progress. No wasted minutes re-teaching what you already practiced.",
+        "point1": "Book around your calendar in your timezone",
+        "point2": "Teachers open the same unit you just finished",
+        "point3": "Speaking feedback and homework review",
+        "point4": "Online via Zoom or Google Meet"
+      },
+      "cert": {
+        "title": "Verifiable certificates",
+        "body": "Finish a level, pass the exam, receive a PDF with a public code embassies and HR can verify.",
+        "point1": "Level exam tied to the curriculum you studied",
+        "point2": "PDF certificate with CEFR equivalent",
+        "point3": "Public verification code for protocol teams",
+        "point4": "Clear record for organizations and cohorts"
+      },
+      "journey": {
+        "eyebrow": "How it fits together",
+        "title": "Study, coach, certify — same path.",
+        "body": "You do not choose between self-study and teaching. You move through one ladder with optional live coaching at every step.",
+        "step1Title": "Entitle & unlock",
+        "step1Body": "An administrator provisions your account and opens the levels your role needs.",
+        "step2Title": "Complete units",
+        "step2Body": "Work culture, language, and practice on your own schedule — progress is saved.",
+        "step3Title": "Book a coach",
+        "step3Body": "When you want feedback, book a live session on the unit you just finished.",
+        "step4Title": "Earn the certificate",
+        "step4Body": "Pass the level exam and download a verifiable PDF for your organization."
+      },
+      "audience": {
+        "eyebrow": "Who we serve",
+        "title": "Built for the work you actually do.",
+        "body": "Personas shape examples and framing — the curriculum stays shared so cohorts stay aligned.",
+        "diplomatTitle": "Diplomats & protocol",
+        "diplomatBody": "Formal register, rank-aware greetings, and certificates embassies can verify.",
+        "ngoTitle": "NGO & field staff",
+        "ngoBody": "Practical Amharic for meetings, community visits, and coordination on the ground.",
+        "researchTitle": "Researchers & academics",
+        "researchBody": "Structured levels with cultural context for interviews, archives, and fieldwork.",
+        "diasporaTitle": "Diaspora & family",
+        "diasporaBody": "Reconnect with Ethiopian roots through spoken Amharic that fits real visits home."
+      },
+      "org": {
+        "eyebrow": "For organizations",
+        "title": "Cohorts, entitlements, and one admin path.",
+        "body": "Embassies, NGOs, and universities provision learners centrally — you control who unlocks which levels.",
+        "feature1Title": "Admin-provisioned accounts",
+        "feature1Body": "No public self-signup. Request access and we set up logins when your cohort is ready.",
+        "feature2Title": "Level entitlements",
+        "feature2Body": "Unlock Foundations first, or open the band your staff actually need.",
+        "feature3Title": "Shared progress visibility",
+        "feature3Body": "Teachers and coordinators see completed units before live sessions and reviews."
+      },
       "ctaTitle": "Ready to start?",
       "ctaBody": "Request access for yourself or your organization.",
       "ctaPrimary": "Request access",
@@ -228,7 +286,8 @@
       "inactive": "This account has been deactivated. Contact your administrator.",
       "noAccount": "No Fidel account exists for this email. Contact your administrator.",
       "rateLimited": "Too many attempts. Please wait a moment and try again.",
-      "validation": "Please check the fields and try again."
+      "validation": "Please check the fields and try again.",
+      "sessionExpired": "Your session ended. Sign in again to continue."
     },
     "setPassword": {
       "title": "Choose your password",
@@ -251,9 +310,9 @@
     },
     "forgot": {
       "title": "Reset your password",
-      "subtitle": "Enter your email and we will send a reset link if an account exists.",
-      "submit": "Send reset link",
-      "sent": "If an account exists for that email, a reset link is on its way."
+      "subtitle": "Enter your email and we will notify your administrator. They will reset your password and send you new login details.",
+      "submit": "Request password reset",
+      "sent": "If an account exists for that email, your administrator has been notified. They will contact you with new login details."
     }
   },
   "nav": {
@@ -290,6 +349,7 @@
     "courseLabel": "Course: Amharic for Beginners (A1)",
     "subtitle": "Continue where you left off - culture, language, then practice.",
     "viewCertificate": "View certificate",
+    "viewProgress": "View progress",
     "greeting": {
       "morning": "Good morning, {name}",
       "afternoon": "Good afternoon, {name}",
@@ -302,7 +362,9 @@
       "minutes": "~45 min / lesson",
       "cta": "Continue Unit 1",
       "progressLabel": "Overall progress",
-      "percent": "{value}% completed"
+      "percent": "{value}% completed",
+      "practicePassed": "Practice passed {done}/{total}",
+      "seeDetail": "See grade detail"
     },
     "parts": {
       "title": "Unit 1 structure"
@@ -342,6 +404,10 @@
       "startBody": "Open Foundations and work through culture, language, and practice.",
       "homeworkTitle": "Homework inbox is clear",
       "homeworkBody": "Assignments from your teacher will appear here when they are ready.",
+      "homeworkPendingTitle": "{count} homework assignments waiting",
+      "homeworkPendingBodyOne": "Open the assignment, complete the tasks, and submit your answers.",
+      "homeworkPendingBody": "You have {count} assignments to complete. Open your homework inbox to continue.",
+      "homeworkCta": "Open homework",
       "accessTitle": "Access is managed by your administrator",
       "accessBody": "Levels and session credits come from your program coordinator."
     },
@@ -351,6 +417,57 @@
       "viewAll": "My levels",
       "available": "Available",
       "comingSoon": "Coming soon"
+    }
+  },
+  "progress": {
+    "eyebrow": "Your results",
+    "title": "Progress",
+    "subtitle": "Practice is pass or fail. Your unit grade is Homework 40%, Quiz 10%, and Live assessment 50%.",
+    "empty": "We could not load your progress yet. Try again shortly, or continue from your dashboard.",
+    "summary": {
+      "average": "Average grade",
+      "practice": "Practice passed",
+      "complete": "Units complete",
+      "started": "Units started"
+    },
+    "weights": {
+      "title": "How grades work",
+      "body": "Each unit needs a practice pass plus the three scored components before a final percentage is shown.",
+      "practice": "Practice",
+      "homework": "Homework",
+      "quiz": "Unit quiz",
+      "live": "Live assessment",
+      "passFail": "Pass / fail"
+    },
+    "unitsFallback": "Units",
+    "levelAverage": "Level average {value}%",
+    "unitLabel": "Unit {n}",
+    "unitGrade": "Unit grade",
+    "pass": "Passed",
+    "fail": "Not passed",
+    "openUnit": "Open practice",
+    "openHomework": "Open homework"
+  },
+  "homework": {
+    "eyebrow": "Assignments",
+    "title": "Homework",
+    "subtitle": "Open published assignments from your teacher, complete the tasks, and submit your answers.",
+    "emptyTitle": "No homework yet",
+    "emptyBody": "When your teacher publishes an assignment, it will show up here so you can open and complete it.",
+    "backDashboard": "Back to dashboard",
+    "backList": "All homework",
+    "open": "Open",
+    "view": "View",
+    "due": "Due {date}",
+    "noContent": "This assignment does not have student content yet. You can still submit using the form below.",
+    "submitFallbackHint": "Complete the assignment using the options below, then submit your work.",
+    "feedback": "Teacher feedback",
+    "grade": "Grade: {value}%",
+    "status": {
+      "pending": "To do",
+      "submitted": "Submitted",
+      "reviewed": "Reviewed",
+      "needs_resubmission": "Needs resubmission"
     }
   },
   "teach": {

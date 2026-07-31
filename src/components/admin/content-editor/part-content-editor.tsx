@@ -1317,6 +1317,29 @@ function BlockFields({
               placeholder="Use a word from the list."
             />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake after final attempt
+            </label>
+          </div>
           <div>
             <Label>Word list (one per line — shown above questions)</Label>
             <Textarea
@@ -1388,6 +1411,124 @@ function BlockFields({
               }
             >
               Add question
+            </Button>
+          </div>
+        </div>
+      )
+    case 'meaning_fill':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Prompt (optional)</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Pick the Amharic that matches each English meaning."
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake after final attempt
+            </label>
+          </div>
+          <div>
+            <Label>Word list (one per line — shown at the top)</Label>
+            <Textarea
+              className="mt-1.5 min-h-[80px] font-mono text-xs"
+              value={block.wordBank.join('\n')}
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  wordBank: e.target.value.split('\n').map((s) => s.trim()),
+                })
+              }
+              placeholder={'እንደምን አደርክ\nእንደምን አደርሽ\nሰላም'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Meanings & answers</Label>
+            {block.items.map((item, i) => (
+              <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.items.length}
+                  label={`Item ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.items.length) return
+                    onChange({ ...block, items: arrayMove(block.items, from, to) })
+                  }}
+                  onRemove={
+                    block.items.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            items: block.items.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <Input
+                  placeholder="English meaning (e.g. Good morning for a male)"
+                  value={item.meaning}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, meaning: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Input
+                  placeholder="Correct Amharic / answer from word list"
+                  value={item.answer}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, answer: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  items: [
+                    ...block.items,
+                    { id: crypto.randomUUID(), meaning: '', answer: '' },
+                  ],
+                })
+              }
+            >
+              Add meaning
             </Button>
           </div>
         </div>
@@ -1763,6 +1904,29 @@ function BlockFields({
               onChange={(e) => onChange({ ...block, prompt: e.target.value })}
             />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake after final attempt
+            </label>
+          </div>
           <div className="space-y-2">
             <Label>Options</Label>
             {block.options.map((opt, i) => (
@@ -1849,6 +2013,29 @@ function BlockFields({
               value={block.prompt ?? ''}
               onChange={(e) => onChange({ ...block, prompt: e.target.value })}
             />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake after final attempt
+            </label>
           </div>
           <div className="space-y-2">
             <Label>Pairs</Label>

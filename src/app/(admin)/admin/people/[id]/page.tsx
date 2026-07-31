@@ -10,18 +10,21 @@ import { createAdminDb } from '@/lib/admin/db'
 import { TIMEZONES, formatDate, formatDateTime, formatMoney } from '@/lib/admin/constants'
 import {
   updatePersonAction,
+  updateStudentProfileAction,
+  updateTeacherProfileAction,
   suspendPersonAction,
   reactivatePersonAction,
   activatePersonAction,
   resendInviteAction,
-  resetPasswordAction,
   deletePersonAndRedirectAction,
   revokeEntitlementAction,
   restoreEntitlementAction,
 } from '@/app/(admin)/admin/manage-actions'
+import { PersonPasswordPanel } from './person-password-panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -30,6 +33,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { StudentProgressTracker } from '@/components/admin/student-progress-tracker'
+import { getStudentProgressDetail } from '@/lib/data/progress'
 import { TeacherAssignmentPanel } from './teacher-assignment-panel'
 
 type Props = { params: Promise<{ id: string }> }
@@ -48,7 +53,7 @@ export default async function PersonDetailPage({ params }: Props) {
   const { data: profile } = await db.from('profiles').select('*').eq('id', id).maybeSingle()
   if (!profile) notFound()
 
-  const [student, teacher, entitlements, payments, notes, assignments, teachers] =
+  const [student, teacher, entitlements, payments, notes, assignments, teachers, progress, pendingReset] =
     await Promise.all([
       db.from('student_profiles').select('*').eq('user_id', id).maybeSingle(),
       db.from('teacher_profiles').select('*').eq('user_id', id).maybeSingle(),
@@ -78,6 +83,13 @@ export default async function PersonDetailPage({ params }: Props) {
         .eq('role', 'teacher')
         .eq('is_active', true)
         .order('full_name'),
+      getStudentProgressDetail(id, { asAdmin: true }),
+      db
+        .from('password_reset_requests')
+        .select('id')
+        .eq('profile_id', id)
+        .eq('status', 'pending')
+        .maybeSingle(),
     ])
 
   const teacherIds = (assignments.data ?? []).map((a: { teacher_id: string }) => a.teacher_id)
@@ -104,6 +116,11 @@ export default async function PersonDetailPage({ params }: Props) {
         actions={
           isStudent
             ? [
+                {
+                  label: 'Manage progress',
+                  href: `/admin/progress/${id}`,
+                  variant: 'default' as const,
+                },
                 {
                   label: 'Grant access',
                   href: `/admin/entitlements?studentId=${id}`,
@@ -134,12 +151,6 @@ export default async function PersonDetailPage({ params }: Props) {
           action={resendInviteAction.bind(null, id)}
           message={`Resend invite to ${profile.email}?`}
           label="Resend invite"
-          variant="outline"
-        />
-        <ConfirmForm
-          action={resetPasswordAction.bind(null, id)}
-          message={`Generate a password reset for ${profile.email}?`}
-          label="Reset password"
           variant="outline"
         />
         <Button asChild size="sm" variant="outline">
@@ -184,6 +195,10 @@ export default async function PersonDetailPage({ params }: Props) {
               />
             </div>
             <div>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" className="mt-1.5" defaultValue={profile.email} required />
+            </div>
+            <div>
               <Label htmlFor="phone">Phone</Label>
               <Input id="phone" name="phone" className="mt-1.5" defaultValue={profile.phone ?? ''} />
             </div>
@@ -206,6 +221,23 @@ export default async function PersonDetailPage({ params }: Props) {
               <Label htmlFor="locale">Locale</Label>
               <Input id="locale" name="locale" className="mt-1.5" defaultValue={profile.locale} />
             </div>
+            {profile.role === 'admin' ? (
+              <div>
+                <Label htmlFor="adminTitle">Admin title</Label>
+                <select
+                  id="adminTitle"
+                  name="adminTitle"
+                  defaultValue={profile.admin_title ?? ''}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">None</option>
+                  <option value="super_admin">Super admin</option>
+                  <option value="content_manager">Content manager</option>
+                  <option value="program_coordinator">Program coordinator</option>
+                  <option value="support">Support</option>
+                </select>
+              </div>
+            ) : null}
             <Button type="submit">Save profile</Button>
           </form>
         </SectionCard>
@@ -265,6 +297,217 @@ export default async function PersonDetailPage({ params }: Props) {
           </dl>
         </SectionCard>
       </div>
+
+      {student.data ? (
+        <div className="mb-8">
+          <SectionCard title="Fellow learning profile">
+            <form action={updateStudentProfileAction} className="grid gap-3 lg:grid-cols-2">
+              <input type="hidden" name="userId" value={id} />
+              <div>
+                <Label htmlFor="preferredName">Preferred name</Label>
+                <Input
+                  id="preferredName"
+                  name="preferredName"
+                  className="mt-1.5"
+                  defaultValue={student.data.preferred_name ?? ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="persona">Persona</Label>
+                <select
+                  id="persona"
+                  name="persona"
+                  defaultValue={student.data.persona ?? 'other'}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="diplomat">Diplomat</option>
+                  <option value="ngo">NGO</option>
+                  <option value="tourist">Tourist</option>
+                  <option value="missionary">Missionary</option>
+                  <option value="researcher">Researcher</option>
+                  <option value="diaspora">Diaspora</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="studyIntent">Study intent</Label>
+                <select
+                  id="studyIntent"
+                  name="studyIntent"
+                  defaultValue={student.data.study_intent ?? 'steady'}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="casual">Casual</option>
+                  <option value="steady">Steady</option>
+                  <option value="intensive">Intensive</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="priorExperience">Prior experience</Label>
+                <select
+                  id="priorExperience"
+                  name="priorExperience"
+                  defaultValue={student.data.prior_experience ?? 'none'}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="none">None</option>
+                  <option value="few_words">Few words</option>
+                  <option value="speaks_some">Speaks some</option>
+                  <option value="reads_fidel">Reads fidel</option>
+                  <option value="conversational">Conversational</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="nativeLanguage">Native language</Label>
+                <Input
+                  id="nativeLanguage"
+                  name="nativeLanguage"
+                  className="mt-1.5"
+                  defaultValue={student.data.native_language ?? ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="otherLanguages">Other languages (comma-separated)</Label>
+                <Input
+                  id="otherLanguages"
+                  name="otherLanguages"
+                  className="mt-1.5"
+                  defaultValue={(student.data.other_languages ?? []).join(', ')}
+                />
+              </div>
+              <div>
+                <Label htmlFor="country">Country (ISO)</Label>
+                <Input id="country" name="country" className="mt-1.5" defaultValue={student.data.country ?? ''} />
+              </div>
+              <div>
+                <Label htmlFor="jobTitle">Job title</Label>
+                <Input id="jobTitle" name="jobTitle" className="mt-1.5" defaultValue={student.data.job_title ?? ''} />
+              </div>
+              <div>
+                <Label htmlFor="department">Department</Label>
+                <Input id="department" name="department" className="mt-1.5" defaultValue={student.data.department ?? ''} />
+              </div>
+              <div>
+                <Label htmlFor="preferredDays">Preferred days (0-6, comma-separated)</Label>
+                <Input
+                  id="preferredDays"
+                  name="preferredDays"
+                  className="mt-1.5"
+                  defaultValue={(student.data.preferred_days ?? []).join(',')}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Label htmlFor="preferredTimes">Preferred times (morning,afternoon,evening)</Label>
+                <Input
+                  id="preferredTimes"
+                  name="preferredTimes"
+                  className="mt-1.5"
+                  defaultValue={(student.data.preferred_times ?? []).join(',')}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Label htmlFor="learningGoal">Learning goal</Label>
+                <Textarea
+                  id="learningGoal"
+                  name="learningGoal"
+                  className="mt-1.5"
+                  defaultValue={student.data.learning_goal ?? ''}
+                  rows={3}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Button type="submit">Save fellow profile</Button>
+              </div>
+            </form>
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {teacher.data ? (
+        <div className="mb-8">
+          <SectionCard title="Teacher profile">
+            <form action={updateTeacherProfileAction} className="grid gap-3 lg:grid-cols-2">
+              <input type="hidden" name="userId" value={id} />
+              <div className="lg:col-span-2">
+                <Label htmlFor="headline">Headline</Label>
+                <Input id="headline" name="headline" className="mt-1.5" defaultValue={teacher.data.headline ?? ''} />
+              </div>
+              <div className="lg:col-span-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea id="bio" name="bio" className="mt-1.5" defaultValue={teacher.data.bio ?? ''} rows={4} />
+              </div>
+              <div>
+                <Label htmlFor="yearsExperience">Years experience</Label>
+                <Input
+                  id="yearsExperience"
+                  name="yearsExperience"
+                  type="number"
+                  min={0}
+                  className="mt-1.5"
+                  defaultValue={teacher.data.years_experience ?? ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="hourlyRateCents">Hourly rate (cents)</Label>
+                <Input
+                  id="hourlyRateCents"
+                  name="hourlyRateCents"
+                  type="number"
+                  min={0}
+                  className="mt-1.5"
+                  defaultValue={teacher.data.hourly_rate_cents ?? ''}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Label htmlFor="languagesSpoken">Languages spoken (comma-separated)</Label>
+                <Input
+                  id="languagesSpoken"
+                  name="languagesSpoken"
+                  className="mt-1.5"
+                  defaultValue={(teacher.data.languages_spoken ?? []).join(', ')}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm lg:col-span-2">
+                <input
+                  type="checkbox"
+                  name="isAcceptingStudents"
+                  defaultChecked={Boolean(teacher.data.is_accepting_students)}
+                />
+                Accepting students
+              </label>
+              <div className="lg:col-span-2">
+                <Button type="submit">Save teacher profile</Button>
+              </div>
+            </form>
+          </SectionCard>
+        </div>
+      ) : null}
+
+      <div className="mb-8">
+        <SectionCard title="Password">
+          <PersonPasswordPanel
+            personId={id}
+            email={profile.email}
+            hasPendingResetRequest={Boolean(pendingReset.data)}
+          />
+        </SectionCard>
+      </div>
+
+      {isStudent && progress ? (
+        <div className="mb-8">
+          <SectionCard
+            title="Progress tracker"
+            description="Practice pass/fail and weighted unit grades for this student."
+            action={
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/admin/progress/${id}` as '/'}>Manage</Link>
+              </Button>
+            }
+          >
+            <StudentProgressTracker detail={progress} />
+          </SectionCard>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {isStudent ? (

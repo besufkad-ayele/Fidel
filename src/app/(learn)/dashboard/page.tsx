@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  FileText,
 } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { AmharicText } from '@/components/shared/amharic-text'
@@ -13,6 +14,8 @@ import { FidelBadge } from '@/components/shared/fidel-badge'
 import { StatusChip } from '@/components/shared/status-chip'
 import { Button } from '@/components/ui/button'
 import { getCurrentProfile } from '@/lib/auth/session'
+import { listActionableHomeworkForStudent } from '@/lib/data/homework'
+import { getCurrentStudentProgress } from '@/lib/data/progress'
 import { LEVELS } from '@/lib/constants/brand'
 import { HA_UNITS, UNIT_PARTS } from '@/lib/constants/curriculum'
 
@@ -20,12 +23,34 @@ export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function StudentDashboardPage() {
   const profile = await getCurrentProfile()
+  const [progress, actionableHomework] = await Promise.all([
+    getCurrentStudentProgress(),
+    listActionableHomeworkForStudent(),
+  ])
   const t = await getTranslations('dashboard')
   const firstName = profile?.full_name?.split(/\s+/)[0]
   const hour = new Date().getHours()
   const greetingKey = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
   const level = LEVELS[0]!
   const activeUnit = HA_UNITS[0]!
+  const haUnits = progress?.units.filter((u) => u.level?.id === 'ha') ?? []
+  const unitsComplete = haUnits.filter((u) => u.grade.isComplete).length
+  const unitsTotal = haUnits.length || 10
+  const overallPct =
+    progress?.averageGrade != null
+      ? Math.round(progress.averageGrade)
+      : unitsTotal > 0
+        ? Math.round((unitsComplete / unitsTotal) * 100)
+        : 0
+  const practicePassed = haUnits.filter((u) => u.grade.practicePassed).length
+  const homeworkHref =
+    actionableHomework.length === 1
+      ? (`/homework/${actionableHomework[0]!.id}` as '/')
+      : ('/homework' as '/')
+  const homeworkTitle =
+    actionableHomework.length === 1
+      ? actionableHomework[0]!.title
+      : t('attention.homeworkPendingTitle', { count: actionableHomework.length })
 
   return (
     <div className="space-y-8">
@@ -40,7 +65,10 @@ export default async function StudentDashboardPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusChip state="in_progress" />
+          <StatusChip state={overallPct > 0 ? 'in_progress' : 'not_started'} />
+          <Button asChild size="sm" variant="outline">
+            <Link href={'/progress' as '/'}>{t('viewProgress')}</Link>
+          </Button>
           <Button asChild size="sm" className="bg-gold-500 text-green-950 hover:bg-gold-600">
             <Link href={'/certificates' as '/'}>
               <Award className="size-3.5" />
@@ -50,7 +78,36 @@ export default async function StudentDashboardPage() {
         </div>
       </header>
 
-      {/* Hero level card */}
+      {actionableHomework.length > 0 ? (
+        <Link
+          href={homeworkHref}
+          className="group flex items-start justify-between gap-4 rounded-xl border-2 border-gold-400 bg-gold-50 p-5 shadow-sm transition-colors hover:bg-gold-100/80"
+        >
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold-500/15 text-gold-700">
+              <FileText className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+                {t('attention.eyebrow')}
+              </p>
+              <h2 className="font-display text-xl text-green-900 group-hover:text-green-800">
+                {homeworkTitle}
+              </h2>
+              <p className="text-sm text-green-800/80">
+                {actionableHomework.length === 1
+                  ? t('attention.homeworkPendingBodyOne')
+                  : t('attention.homeworkPendingBody', { count: actionableHomework.length })}
+              </p>
+            </div>
+          </div>
+          <span className="mt-1 inline-flex shrink-0 items-center gap-1 text-sm font-medium text-gold-700">
+            {t('attention.homeworkCta')}
+            <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      ) : null}
+
       <section className="relative overflow-hidden rounded-2xl bg-green-900 p-6 text-cream-50 shadow-overlay sm:p-8">
         <div className="img-card-overlay-center absolute inset-0" aria-hidden />
         <div className="relative z-10 flex flex-col items-center justify-between gap-6 md:flex-row">
@@ -68,7 +125,7 @@ export default async function StudentDashboardPage() {
             <div className="flex flex-wrap items-center justify-center gap-4 pt-1 text-xs md:justify-start">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="size-4 text-gold-400" />
-                {t('hero.unitsComplete', { done: 0, total: 10 })}
+                {t('hero.unitsComplete', { done: unitsComplete, total: unitsTotal })}
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock className="size-4 text-gold-400" />
@@ -89,14 +146,24 @@ export default async function StudentDashboardPage() {
             <FidelBadge level="ha" size="lg" dark />
             <span className="mt-2 text-xs font-bold text-gold-300">{t('hero.progressLabel')}</span>
             <div className="mt-2 h-2 w-32 overflow-hidden rounded-full bg-green-950">
-              <div className="h-full w-[12%] bg-gold-500" />
+              <div
+                className="h-full bg-gold-500 transition-all"
+                style={{ width: `${Math.min(100, Math.max(0, overallPct))}%` }}
+              />
             </div>
-            <span className="mt-1 text-[10px] text-cream-200">{t('hero.percent', { value: 12 })}</span>
+            <span className="mt-1 text-[10px] text-cream-200">
+              {t('hero.percent', { value: overallPct })}
+            </span>
+            <span className="mt-2 text-[10px] text-cream-200/80">
+              {t('hero.practicePassed', { done: practicePassed, total: unitsTotal })}
+            </span>
+            <Button asChild size="sm" variant="ghost" className="mt-3 text-gold-300 hover:text-gold-200">
+              <Link href={'/progress' as '/'}>{t('hero.seeDetail')}</Link>
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* Three parts */}
       <section>
         <h3 className="mb-4 font-display text-xl text-green-900">{t('parts.title')}</h3>
         <div className="grid gap-4 md:grid-cols-3 md:gap-6">
@@ -120,7 +187,6 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      {/* Unit track */}
       <section className="space-y-3">
         <h3 className="font-display text-xl text-green-900">{t('units.title')}</h3>
 
@@ -176,7 +242,6 @@ export default async function StudentDashboardPage() {
         ))}
       </section>
 
-      {/* Level ladder */}
       <section>
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>

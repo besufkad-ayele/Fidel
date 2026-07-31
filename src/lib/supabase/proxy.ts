@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { publicEnv } from '@/lib/env'
 import { authOnlyPaths, homeForRole, isProtectedPath, isRole } from '@/lib/auth/roles'
+import {
+  SESSION_MAX_AGE_MS,
+  SESSION_STARTED_COOKIE,
+  isSessionExpired,
+} from '@/lib/auth/session-timeout'
 import type { Database } from '@/types/database.types'
 
 /**
@@ -38,6 +43,33 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const { pathname, search } = request.nextUrl
+
+  // Absolute 1-week session from login cookie (JWT may still refresh otherwise).
+  if (user) {
+    const startedRaw = request.cookies.get(SESSION_STARTED_COOKIE)?.value
+    const started = startedRaw ? Number(startedRaw) : NaN
+    if (Number.isFinite(started) && isSessionExpired(started)) {
+      await supabase.auth.signOut({ scope: 'global' })
+      response.cookies.set(SESSION_STARTED_COOKIE, '', {
+        path: '/',
+        maxAge: 0,
+      })
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.search = ''
+      url.searchParams.set('error', 'session_expired')
+      return redirectPreservingCookies(url, response)
+    }
+    // Existing sessions created before this cookie existed — start the clock now.
+    if (!Number.isFinite(started)) {
+      response.cookies.set(SESSION_STARTED_COOKIE, String(Date.now()), {
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: Math.ceil(SESSION_MAX_AGE_MS / 1000),
+      })
+    }
+  }
 
   if (!user && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone()

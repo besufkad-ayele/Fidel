@@ -14,6 +14,7 @@ import { ListeningPractice } from '@/components/content/interactive/listening-pr
 import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
 import { ComprehensionCheck } from '@/components/content/interactive/comprehension-check'
 import { InteractiveFillBlank } from '@/components/content/interactive/fill-blank'
+import { InteractiveMeaningFill } from '@/components/content/interactive/meaning-fill'
 import {
   InteractiveFillableTable,
   StaticContentTable,
@@ -41,6 +42,9 @@ type BlockRendererProps = {
   vocabulary?: VocabLookup
   mode?: 'student' | 'preview'
   className?: string
+  /** When set, homework_prompt blocks can save a real submission. */
+  assignmentId?: string
+  alreadySubmitted?: boolean
 }
 
 function MarkdownBody({ text }: { text: string }) {
@@ -90,6 +94,7 @@ function renderBlock(
   block: ContentBlock,
   vocabulary: VocabLookup,
   mode: 'student' | 'preview',
+  opts?: { assignmentId?: string; alreadySubmitted?: boolean },
 ) {
   switch (block.type) {
     case 'heading': {
@@ -238,6 +243,8 @@ function renderBlock(
       )
     case 'fill_blank':
       return <InteractiveFillBlank block={block} mode={mode} />
+    case 'meaning_fill':
+      return <InteractiveMeaningFill block={block} mode={mode} />
     case 'references':
       return (
         <div className="space-y-4">
@@ -634,7 +641,14 @@ function renderBlock(
         />
       )
     case 'homework_prompt':
-      return <HomeworkSubmission block={block} mode={mode} />
+      return (
+        <HomeworkSubmission
+          block={block}
+          mode={mode}
+          assignmentId={opts?.assignmentId}
+          alreadySubmitted={opts?.alreadySubmitted}
+        />
+      )
     case 'divider':
       return <hr className="border-cream-300" />
     default:
@@ -647,6 +661,8 @@ export function BlockRenderer({
   vocabulary = {},
   mode = 'student',
   className,
+  assignmentId,
+  alreadySubmitted,
 }: BlockRendererProps) {
   const categories =
     content.part === 'practice' || content.part === 'language_lesson'
@@ -672,6 +688,8 @@ export function BlockRenderer({
     if (!resolvedActive) return []
     return content.blocks.filter((b) => b.categoryId === resolvedActive)
   }, [resolvedActive, categories.length, content.blocks])
+
+  const blockOpts = { assignmentId, alreadySubmitted }
 
   return (
     <AudioPlaybackProvider>
@@ -699,7 +717,7 @@ export function BlockRenderer({
         ) : null}
 
         {beforeBlocks.map((block) => (
-          <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
+          <div key={block.id}>{renderBlock(block, vocabulary, mode, blockOpts)}</div>
         ))}
 
         {categories.length > 0 ? (
@@ -713,7 +731,7 @@ export function BlockRenderer({
               <p className="text-sm text-green-600">No exercises in this category yet.</p>
             ) : (
               categoryBlocks.map((block) => (
-                <div key={block.id}>{renderBlock(block, vocabulary, mode)}</div>
+                <div key={block.id}>{renderBlock(block, vocabulary, mode, blockOpts)}</div>
               ))
             )}
           </div>

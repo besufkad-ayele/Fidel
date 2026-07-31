@@ -1,14 +1,18 @@
 import { z } from 'zod'
+import { getSiteUrl } from '@/lib/site-url'
 
 /**
  * `NEXT_PUBLIC_*` variables must be referenced as literal property accesses so the
  * Next.js compiler can inline them into the client bundle. Destructuring
  * `process.env` here would silently ship `undefined` to the browser.
+ *
+ * `NEXT_PUBLIC_SITE_URL` is resolved via `getSiteUrl()` so Vercel deploys do not
+ * silently keep the localhost default from `.env.example`.
  */
 const publicSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
-  NEXT_PUBLIC_SITE_URL: z.url().default('http://localhost:3000'),
+  NEXT_PUBLIC_SITE_URL: z.url(),
   /** External Typeform / Google Form / etc. Empty string means CTA is hidden until set. */
   NEXT_PUBLIC_REQUEST_ACCESS_URL: z.string().default(''),
 })
@@ -16,7 +20,7 @@ const publicSchema = z.object({
 export const publicEnv = publicSchema.parse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  NEXT_PUBLIC_SITE_URL: getSiteUrl(),
   NEXT_PUBLIC_REQUEST_ACCESS_URL: process.env.NEXT_PUBLIC_REQUEST_ACCESS_URL ?? '',
 })
 

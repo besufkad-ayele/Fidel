@@ -32,6 +32,7 @@ import {
 import { BrandLogo } from '@/components/shared/brand-logo'
 import { initialsFromName } from '@/lib/admin/nav'
 import { cn } from '@/lib/utils'
+import { SessionTimeoutGuard } from '@/components/features/auth/session-timeout-guard'
 import type { CurrentProfile } from '@/lib/auth/session'
 
 /** Serializable icon keys — resolve inside this client module. */
@@ -238,6 +239,7 @@ export function AppShell({ profile, nav, children, brandHref, roleLabel }: AppSh
 
   return (
     <div className="min-h-dvh bg-cream-100">
+      <SessionTimeoutGuard />
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col overflow-hidden border-r border-green-800 bg-sidebar text-sidebar-foreground xl:w-[264px] lg:flex">
         <SidebarBody
           profile={profile}

@@ -19,9 +19,11 @@ type AdminNavProps = {
   groups: AdminNavGroupWithIcons[]
   onNavigate?: () => void
   className?: string
+  /** Unread / pending counts keyed by nav href. */
+  badges?: Record<string, number>
 }
 
-export function AdminNav({ groups, onNavigate, className }: AdminNavProps) {
+export function AdminNav({ groups, onNavigate, className, badges }: AdminNavProps) {
   const pathname = usePathname()
 
   return (
@@ -44,6 +46,7 @@ export function AdminNav({ groups, onNavigate, className }: AdminNavProps) {
                   ? pathname === '/admin'
                   : pathname === item.href || pathname.startsWith(`${item.href}/`)
               const Icon = item.icon
+              const badge = badges?.[item.href] ?? 0
 
               return (
                 <Link
@@ -70,6 +73,11 @@ export function AdminNav({ groups, onNavigate, className }: AdminNavProps) {
                     )}
                   />
                   <span className="truncate">{item.label}</span>
+                  {badge > 0 ? (
+                    <span className="ml-auto min-w-5 rounded-full bg-gold-500 px-1.5 py-0.5 text-center text-[11px] font-semibold tabular-nums text-green-950">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
                 </Link>
               )
             })}

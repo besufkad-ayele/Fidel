@@ -1,12 +1,9 @@
 import { getTranslations } from 'next-intl/server'
 import { AppShell, type AppNavItem } from '@/components/layout/app-shell'
 import { requireRole } from '@/lib/auth/guards'
-import { routes } from '@/lib/auth/routes'
-import { redirect } from 'next/navigation'
 
 export default async function LearnLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireRole('student')
-  if (!profile.welcome_seen_at) redirect(routes.welcome)
 
   const t = await getTranslations('nav')
 

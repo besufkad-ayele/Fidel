@@ -16,9 +16,16 @@ export function InteractiveMultipleChoice({
   mode?: 'student' | 'preview'
 }) {
   const [selected, setSelected] = useState<string | null>(null)
-  const [revealed, setRevealed] = useState(false)
+  const [checked, setChecked] = useState(false)
+  const [attemptsUsed, setAttemptsUsed] = useState(0)
 
   const correct = block.options.find((o) => o.correct)
+  const maxAttempts = Math.max(1, block.maxAttempts ?? 2)
+  const isCorrect = checked && selected === correct?.id
+  const isFinalAttempt = attemptsUsed >= maxAttempts
+  const revealAnswer = isCorrect || isFinalAttempt
+  const canRetry = checked && !isCorrect && attemptsUsed < maxAttempts
+  const canRetake = checked && !isCorrect && isFinalAttempt && (block.allowRetake ?? false)
 
   return (
     <div className="space-y-3 rounded-xl border border-cream-300 bg-cream-50 p-5">
@@ -29,13 +36,13 @@ export function InteractiveMultipleChoice({
       <div className="space-y-2">
         {block.options.map((opt) => {
           const isSelected = selected === opt.id
-          const showCorrect = revealed && opt.correct
-          const showWrong = revealed && isSelected && !opt.correct
+          const showCorrect = checked && revealAnswer && opt.correct
+          const showWrong = checked && isSelected && !opt.correct
           return (
             <button
               key={opt.id}
               type="button"
-              disabled={revealed && mode === 'student'}
+              disabled={checked && mode === 'student'}
               onClick={() => setSelected(opt.id)}
               className={cn(
                 'w-full rounded-lg border px-3 py-2.5 text-left text-sm transition',
@@ -53,32 +60,52 @@ export function InteractiveMultipleChoice({
         <Button
           type="button"
           size="sm"
-          disabled={!selected}
-          onClick={() => setRevealed(true)}
+          disabled={!selected || checked}
+          onClick={() => {
+            setChecked(true)
+            setAttemptsUsed((n) => n + 1)
+          }}
         >
-          Check answer
+          Check answer ({attemptsUsed}/{maxAttempts})
         </Button>
-        {revealed ? (
+        {canRetry ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={() => {
               setSelected(null)
-              setRevealed(false)
+              setChecked(false)
             }}
           >
-            Try again
+            Try final attempt
+          </Button>
+        ) : null}
+        {canRetake ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelected(null)
+              setChecked(false)
+              setAttemptsUsed(0)
+            }}
+          >
+            Retake
           </Button>
         ) : null}
       </div>
-      {revealed ? (
+      {checked ? (
         <p className="text-sm text-green-800">
-          {selected === correct?.id ? 'Correct. ' : 'Not quite. '}
-          {block.explanation}
+          {isCorrect ? 'Correct. ' : 'Not quite. '}
+          {attemptsUsed >= maxAttempts && !isCorrect
+            ? 'Final attempt reached. '
+            : `Attempt ${attemptsUsed} of ${maxAttempts}. `}
+          {revealAnswer && block.explanation ? block.explanation : null}
         </p>
       ) : null}
-      {mode === 'preview' && !revealed ? (
+      {mode === 'preview' && !checked ? (
         <p className="text-xs text-green-600">Preview: correct option is marked after Check.</p>
       ) : null}
     </div>

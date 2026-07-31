@@ -30,7 +30,9 @@ export function InteractiveFillBlank({
     Object.fromEntries(items.map((item) => [item.id, ''])),
   )
   const [revealed, setRevealed] = useState(false)
+  const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [draggingWord, setDraggingWord] = useState<string | null>(null)
+  const maxAttempts = Math.max(1, block.maxAttempts ?? 2)
 
   const usedWords = useMemo(() => {
     const used = new Set<string>()
@@ -52,6 +54,7 @@ export function InteractiveFillBlank({
 
   function submitAndCheck() {
     setRevealed(true)
+    setAttemptsUsed((n) => n + 1)
   }
 
   function reset() {
@@ -62,6 +65,11 @@ export function InteractiveFillBlank({
   const correctCount = items.filter(
     (item) => normalizeAnswer(answers[item.id] ?? '') === normalizeAnswer(item.answer),
   ).length
+  const allCorrect = revealed && correctCount === items.length
+  const isFinalAttempt = attemptsUsed >= maxAttempts
+  const revealAnswers = allCorrect || isFinalAttempt
+  const canRetry = revealed && !allCorrect && attemptsUsed < maxAttempts
+  const canRetake = revealed && !allCorrect && isFinalAttempt && (block.allowRetake ?? false)
 
   return (
     <div className="space-y-4 rounded-xl border border-cream-300 bg-cream-50 p-5">
@@ -153,7 +161,7 @@ export function InteractiveFillBlank({
                   </button>
                 ) : null}
               </div>
-              {revealed && isWrong ? (
+              {revealed && revealAnswers && isWrong ? (
                 <p className="text-xs text-green-700">
                   Answer:{' '}
                   {looksAmharic(item.answer) ? (
@@ -170,11 +178,24 @@ export function InteractiveFillBlank({
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" onClick={submitAndCheck} disabled={revealed}>
-          Submit & Check
+          Submit & Check ({attemptsUsed}/{maxAttempts})
         </Button>
-        {revealed ? (
+        {canRetry ? (
           <Button type="button" size="sm" variant="ghost" onClick={reset}>
-            Try again
+            Try final attempt
+          </Button>
+        ) : null}
+        {canRetake ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              reset()
+              setAttemptsUsed(0)
+            }}
+          >
+            Retake
           </Button>
         ) : null}
       </div>
@@ -182,6 +203,7 @@ export function InteractiveFillBlank({
       {revealed ? (
         <p className="text-sm text-green-800">
           Submission checked: {correctCount} of {items.length} correct.
+          {!allCorrect && isFinalAttempt ? ' Final attempt reached; answers are now shown.' : null}
         </p>
       ) : null}
 
