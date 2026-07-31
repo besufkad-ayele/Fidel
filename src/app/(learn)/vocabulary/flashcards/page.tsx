@@ -14,7 +14,7 @@ function buildHref(opts: { level?: string; due?: boolean }) {
   if (opts.level) params.set('level', opts.level)
   if (opts.due) params.set('due', '1')
   const q = params.toString()
-  return q ? `/vocabulary/flashcards?${q}` : '/vocabulary/flashcards'
+  return (q ? `/vocabulary/flashcards?${q}` : '/vocabulary/flashcards') as '/'
 }
 
 export default async function FlashcardsPage({

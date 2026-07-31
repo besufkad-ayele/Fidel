@@ -44,18 +44,28 @@ export async function bookSessionAction(formData: FormData): Promise<void> {
   const withinAvailability = isOpenSlot({
     scheduledAt: start.toISOString(),
     timezone: teacherTimezone,
-    blocks: (availability ?? []).map((b) => ({
-      weekday: b.weekday,
-      start_time: b.start_time,
-      end_time: b.end_time,
-      timezone: b.timezone,
-      is_active: b.is_active,
-    })),
-    timeOff: (timeOff ?? []).map((t) => ({
-      starts_at: t.starts_at,
-      ends_at: t.ends_at,
-      reason: t.reason,
-    })),
+    blocks: (availability ?? []).map(
+      (b: {
+        weekday: number
+        start_time: string
+        end_time: string
+        timezone: string
+        is_active: boolean
+      }) => ({
+        weekday: b.weekday,
+        start_time: b.start_time,
+        end_time: b.end_time,
+        timezone: b.timezone,
+        is_active: b.is_active,
+      }),
+    ),
+    timeOff: (timeOff ?? []).map(
+      (t: { starts_at: string; ends_at: string; reason: string | null }) => ({
+        starts_at: t.starts_at,
+        ends_at: t.ends_at,
+        reason: t.reason,
+      }),
+    ),
     durationMinutes,
   })
   if (!withinAvailability) redirect(`/sessions/book?error=outside_availability&teacherId=${teacherId}`)

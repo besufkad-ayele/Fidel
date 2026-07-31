@@ -22,7 +22,12 @@ export default async function Page() {
   const { data: teachers } = teacherIds.length
     ? await db.from('profiles').select('id, full_name, email').in('id', teacherIds)
     : { data: [] as { id: string; full_name: string; email: string }[] }
-  const teacherMap = new Map((teachers ?? []).map((t) => [t.id, t.full_name || t.email]))
+  const teacherMap = new Map<string, string>(
+    (teachers ?? []).map((t: { id: string; full_name: string | null; email: string }) => [
+      t.id,
+      t.full_name || t.email,
+    ]),
+  )
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

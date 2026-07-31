@@ -115,7 +115,9 @@ export default async function Page({
     .map((iso) => {
       const start = new Date(iso)
       const end = new Date(start.getTime() + 60 * 60 * 1000)
-      const overlaps = booked.some((b) => start < b.sEnd && end > b.sStart)
+      const overlaps = booked.some(
+        (b: { sStart: Date; sEnd: Date }) => start < b.sEnd && end > b.sStart,
+      )
       return { iso, label: slotLabel(start, timezone), isFree: !overlaps }
     })
     .filter((s) => s.isFree)
@@ -135,8 +137,8 @@ export default async function Page({
     ? await db.from('profiles').select('id, full_name, email').in('id', studentIds)
     : { data: [] as { id: string; full_name: string; email: string }[] }
 
-  const studentMap = new Map(
-    (studentProfiles ?? []).map((p: { id: string; full_name: string; email: string }) => [
+  const studentMap = new Map<string, string>(
+    (studentProfiles ?? []).map((p: { id: string; full_name: string | null; email: string }) => [
       p.id,
       p.full_name || p.email,
     ]),
@@ -172,7 +174,7 @@ export default async function Page({
     const bookedCount = candidates.filter((iso) => {
       const start = new Date(iso)
       const end = new Date(start.getTime() + 60 * 60 * 1000)
-      return booked.some((b) => start < b.sEnd && end > b.sStart)
+      return booked.some((b: { sStart: Date; sEnd: Date }) => start < b.sEnd && end > b.sStart)
     }).length
 
     const freeCount = candidates.length - bookedCount

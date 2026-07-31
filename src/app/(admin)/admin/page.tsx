@@ -55,6 +55,7 @@ export default async function AdminOverviewPage() {
     levelsReviewRes,
     levelsPublishedRes,
     orgsRes,
+    passwordResetRes,
   ] = await Promise.all([
     db.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student').eq('is_active', true),
     db.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher').eq('is_active', true),
@@ -81,6 +82,10 @@ export default async function AdminOverviewPage() {
     db.from('levels').select('id', { count: 'exact', head: true }).eq('status', 'in_review'),
     db.from('levels').select('id', { count: 'exact', head: true }).eq('status', 'published'),
     db.from('organizations').select('id', { count: 'exact', head: true }),
+    db
+      .from('password_reset_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending'),
   ])
 
   const paidByCurrency = new Map<string, number>()
@@ -102,7 +107,10 @@ export default async function AdminOverviewPage() {
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const attentionCount =
-    (pendingRes.count ?? 0) + (levelsReviewRes.count ?? 0) + (outstandingRes.count ?? 0)
+    (pendingRes.count ?? 0) +
+    (levelsReviewRes.count ?? 0) +
+    (outstandingRes.count ?? 0) +
+    (passwordResetRes.count ?? 0)
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -310,6 +318,14 @@ export default async function AdminOverviewPage() {
             }
           >
             <div className="space-y-3">
+              <AttentionItem
+                title="Password reset requests"
+                description="Learners asked for a new password from Forgot password."
+                count={passwordResetRes.count ?? 0}
+                href="/admin/notifications"
+                icon={Bell}
+                tone={(passwordResetRes.count ?? 0) > 0 ? 'warning' : 'default'}
+              />
               <AttentionItem
                 title="Pending invites"
                 description="Resend or deliver a one-time setup link."

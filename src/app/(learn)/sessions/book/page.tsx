@@ -47,7 +47,10 @@ export default async function Page({
     )
   }
 
-  const selectedTeacher = (teachers ?? []).find((t) => t.id === selectedTeacherId)
+  const selectedTeacher = (teachers ?? []).find(
+    (t: { id: string; full_name: string | null; email: string; timezone: string | null }) =>
+      t.id === selectedTeacherId,
+  )
   const teacherTimezone = selectedTeacher?.timezone || 'Africa/Addis_Ababa'
   const displayTimezone = profile.timezone || teacherTimezone
   const locale = profile.locale || 'en'
@@ -82,18 +85,28 @@ export default async function Page({
     from: now,
     days: 7,
     timezone: teacherTimezone,
-    blocks: (availability ?? []).map((b) => ({
-      weekday: b.weekday,
-      start_time: b.start_time,
-      end_time: b.end_time,
-      timezone: b.timezone,
-      is_active: b.is_active,
-    })),
-    timeOff: (timeOff ?? []).map((t) => ({
-      starts_at: t.starts_at,
-      ends_at: t.ends_at,
-      reason: t.reason,
-    })),
+    blocks: (availability ?? []).map(
+      (b: {
+        weekday: number
+        start_time: string
+        end_time: string
+        timezone: string
+        is_active: boolean
+      }) => ({
+        weekday: b.weekday,
+        start_time: b.start_time,
+        end_time: b.end_time,
+        timezone: b.timezone,
+        is_active: b.is_active,
+      }),
+    ),
+    timeOff: (timeOff ?? []).map(
+      (t: { starts_at: string; ends_at: string; reason: string | null }) => ({
+        starts_at: t.starts_at,
+        ends_at: t.ends_at,
+        reason: t.reason,
+      }),
+    ),
     durationMinutes: 60,
     stepMinutes: 60,
   })
@@ -109,7 +122,9 @@ export default async function Page({
   const isFree = (iso: string) => {
     const start = new Date(iso)
     const end = new Date(start.getTime() + 60 * 60 * 1000)
-    return !booked.some((b) => start < b.end && end > b.start)
+    return !booked.some(
+      (b: { start: Date; end: Date; iso: string }) => start < b.end && end > b.start,
+    )
   }
 
   const timeLabel = (iso: string) =>
@@ -206,11 +221,18 @@ export default async function Page({
                 className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 defaultValue={selectedTeacherId}
               >
-                {(teachers ?? []).map((teacher) => (
+                {(teachers ?? []).map(
+                  (teacher: {
+                    id: string
+                    full_name: string | null
+                    email: string
+                    timezone: string | null
+                  }) => (
                   <option key={teacher.id} value={teacher.id}>
                     {teacher.full_name || teacher.email}
                   </option>
-                ))}
+                ),
+                )}
               </select>
             </div>
             <Button type="submit" variant="outline">

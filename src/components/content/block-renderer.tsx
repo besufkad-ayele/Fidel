@@ -15,6 +15,7 @@ import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
 import { ComprehensionCheck } from '@/components/content/interactive/comprehension-check'
 import { InteractiveFillBlank } from '@/components/content/interactive/fill-blank'
 import { InteractiveMeaningFill } from '@/components/content/interactive/meaning-fill'
+import { InteractiveSentenceBuild } from '@/components/content/interactive/sentence-build'
 import {
   InteractiveFillableTable,
   StaticContentTable,
@@ -245,6 +246,8 @@ function renderBlock(
       return <InteractiveFillBlank block={block} mode={mode} />
     case 'meaning_fill':
       return <InteractiveMeaningFill block={block} mode={mode} />
+    case 'sentence_build':
+      return <InteractiveSentenceBuild block={block} mode={mode} />
     case 'references':
       return (
         <div className="space-y-4">

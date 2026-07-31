@@ -66,7 +66,6 @@ export async function rateVocabularyCardAction(input: {
     last_rating: input.rating,
     last_reviewed_at: nowIso,
     next_review_at: next.nextReviewAt.toISOString(),
-    updated_at: nowIso,
   }
 
   const { error: writeError } = await supabase
@@ -160,7 +159,6 @@ export async function saveVocabularySessionAction(
     last_rating: s.lastRating,
     last_reviewed_at: nowIso,
     next_review_at: s.nextReviewAt.toISOString(),
-    updated_at: nowIso,
   }))
 
   const { error: writeError } = await supabase

@@ -24,6 +24,7 @@ export const contentBlockTypeSchema = z.enum([
   'table',
   'fill_blank',
   'meaning_fill',
+  'sentence_build',
   'references',
   'objectives',
   'dialogue',
@@ -160,6 +161,28 @@ export const meaningFillBlockSchema = blockBase.extend({
         meaning: z.string(),
         /** Correct word/phrase from the bank */
         answer: z.string(),
+      }),
+    )
+    .min(1),
+})
+
+/** Build a sentence by dragging words from a bank into order. */
+export const sentenceBuildBlockSchema = blockBase.extend({
+  type: z.literal('sentence_build'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** Optional English hint, e.g. "Good morning for a male" */
+        hint: z.string().optional(),
+        /** Correct words in order (space-joined = the sentence) */
+        words: z.array(z.string()).min(2),
+        /** Extra words mixed into the bank */
+        distractors: z.array(z.string()).default([]),
       }),
     )
     .min(1),
@@ -346,6 +369,7 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   tableBlockSchema,
   fillBlankBlockSchema,
   meaningFillBlockSchema,
+  sentenceBuildBlockSchema,
   referencesBlockSchema,
   objectivesBlockSchema,
   dialogueBlockSchema,
@@ -527,6 +551,22 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       ],
     },
     {
+      id: 'sentence',
+      type: 'sentence_build',
+      title: 'Build the sentence',
+      prompt: 'Drag the words into the correct order.',
+      maxAttempts: 2,
+      allowRetake: false,
+      items: [
+        {
+          id: 's1',
+          hint: 'How are you? (to a male)',
+          words: ['እንዴት', 'ነህ'],
+          distractors: ['ነሽ', 'ነዎት'],
+        },
+      ],
+    },
+    {
       id: 'matching',
       type: 'matching_cards',
       prompt: 'Match the Amharic with English',
@@ -695,6 +735,12 @@ export const BLOCK_CATALOG: {
     description: 'Show English meaning; student picks the Amharic from a word list and checks',
     parts: 'all',
   },
+  {
+    type: 'sentence_build',
+    label: 'Build a sentence',
+    description: 'Drag words from a list into order to form a sentence, then check',
+    parts: 'all',
+  },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
@@ -780,6 +826,23 @@ export function createBlock(
             id: crypto.randomUUID(),
             meaning: 'Good morning for a male',
             answer: 'እንደምን አደርክ',
+          },
+        ],
+      }
+    case 'sentence_build':
+      return {
+        id,
+        type,
+        title: 'Build the sentence',
+        prompt: 'Drag the words into the correct order.',
+        maxAttempts: 2,
+        allowRetake: false,
+        items: [
+          {
+            id: crypto.randomUUID(),
+            hint: 'How are you? (to a male)',
+            words: ['እንዴት', 'ነህ'],
+            distractors: ['ነሽ'],
           },
         ],
       }

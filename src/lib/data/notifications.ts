@@ -48,7 +48,11 @@ export const listPasswordResetRequests = cache(
     }
 
     const rows = data ?? []
-    const profileIds = [...new Set(rows.map((r) => r.profile_id))]
+    const profileIds = [
+      ...new Set(
+        rows.map((r: { profile_id: string }) => r.profile_id),
+      ),
+    ]
     const profiles = new Map<string, { full_name: string; role: string }>()
 
     if (profileIds.length > 0) {
@@ -61,7 +65,15 @@ export const listPasswordResetRequests = cache(
       }
     }
 
-    return rows.map((row) => {
+    return rows.map(
+      (row: {
+        id: string
+        profile_id: string
+        email: string
+        status: 'pending' | 'fulfilled' | 'dismissed'
+        created_at: string
+        resolved_at: string | null
+      }) => {
       const profile = profiles.get(row.profile_id)
       return {
         id: row.id,
@@ -73,6 +85,7 @@ export const listPasswordResetRequests = cache(
         createdAt: row.created_at,
         resolvedAt: row.resolved_at,
       }
-    })
+    },
+    )
   },
 )
