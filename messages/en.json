@@ -319,7 +319,7 @@
     "dashboard": "Dashboard",
     "levels": "My levels",
     "vocabulary": "Vocabulary",
-    "sessions": "Live sessions",
+    "sessions": "Book sessions",
     "homework": "Homework",
     "progress": "Progress",
     "certificates": "Certificates",
@@ -408,6 +408,11 @@
       "homeworkPendingBodyOne": "Open the assignment, complete the tasks, and submit your answers.",
       "homeworkPendingBody": "You have {count} assignments to complete. Open your homework inbox to continue.",
       "homeworkCta": "Open homework",
+      "sessionConfirmTitle": "{count} sessions need confirmation",
+      "sessionConfirmTitleOne": "Confirm your last session happened",
+      "sessionConfirmBodyOne": "The scheduled time has passed. Mark it as happened so it clears from your list.",
+      "sessionConfirmBody": "{count} sessions ended without confirmation. Open sessions to mark them as happened.",
+      "sessionConfirmCta": "Open sessions",
       "accessTitle": "Access is managed by your administrator",
       "accessBody": "Levels and session credits come from your program coordinator."
     },
@@ -479,6 +484,13 @@
       "morning": "Good morning, {name}",
       "afternoon": "Good afternoon, {name}",
       "evening": "Good evening, {name}"
+    },
+    "attention": {
+      "eyebrow": "Needs your attention",
+      "pendingTitle": "{count} bookings awaiting approval",
+      "pendingBody": "Approve each request and paste a Google Meet link so the student can join.",
+      "confirmTitle": "{count} sessions need confirmation",
+      "confirmBody": "The scheduled time has passed. Mark each as happened to clear it from your list."
     },
     "stats": {
       "today": "Sessions today",

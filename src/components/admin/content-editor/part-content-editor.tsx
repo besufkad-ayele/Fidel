@@ -415,8 +415,8 @@ function PracticeCategoriesEditor({
       <div className="mb-3">
         <h3 className="font-display text-lg text-green-900">{sectionLabel} categories</h3>
         <p className="text-xs text-green-600">
-          Optional. Add after your intro content. Blocks set to &quot;Before categories&quot; show
-          above the tabs; assigned blocks show under each tab.
+          Create a category, then add and edit blocks inside that section below. Intro blocks stay
+          above the tabs; category blocks appear under each tab.
         </p>
       </div>
 
@@ -435,21 +435,25 @@ function PracticeCategoriesEditor({
         />
         <Button type="button" size="sm" variant="outline" onClick={addCategory}>
           <Plus className="mr-1 size-3.5" />
-          Add
+          Add category
         </Button>
       </div>
 
       {categories.length === 0 ? (
         <p className="text-sm text-green-600">
-          No categories yet — all blocks show in one continuous page.
+          No categories yet — all blocks show in one continuous page. Add a category to start
+          section editing.
         </p>
       ) : (
         <ul className="space-y-2">
-          {categories.map((cat) => (
+          {categories.map((cat, index) => (
             <li
               key={cat.id}
               className="flex flex-wrap items-center gap-2 rounded-lg border border-cream-300 bg-white px-3 py-2"
             >
+              <span className="w-6 text-center text-xs font-semibold text-muted-foreground">
+                {index + 1}
+              </span>
               <Input
                 className="h-8 max-w-xs flex-1"
                 value={cat.name}
@@ -460,7 +464,30 @@ function PracticeCategoriesEditor({
                     ),
                   )
                 }
+                aria-label={`Edit category ${index + 1} name`}
               />
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={index === 0}
+                  aria-label={`Move category ${cat.name || 'untitled'} up`}
+                  onClick={() => onChange(arrayMove(categories, index, index - 1))}
+                >
+                  <ChevronUp className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={index >= categories.length - 1}
+                  aria-label={`Move category ${cat.name || 'untitled'} down`}
+                  onClick={() => onChange(arrayMove(categories, index, index + 1))}
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </div>
               <Button
                 type="button"
                 size="sm"
@@ -484,22 +511,108 @@ function PracticeCategoriesEditor({
   )
 }
 
+function insertBlockForCategory(
+  blocks: ContentBlock[],
+  next: ContentBlock,
+  categoryId: string | null,
+): ContentBlock[] {
+  const block = { ...next, categoryId }
+  if (!categoryId) {
+    let lastIntro = -1
+    blocks.forEach((b, i) => {
+      if (!b.categoryId) lastIntro = i
+    })
+    if (lastIntro < 0) return [block, ...blocks]
+    return [...blocks.slice(0, lastIntro + 1), block, ...blocks.slice(lastIntro + 1)]
+  }
+
+  let lastInCategory = -1
+  blocks.forEach((b, i) => {
+    if (b.categoryId === categoryId) lastInCategory = i
+  })
+  if (lastInCategory >= 0) {
+    return [
+      ...blocks.slice(0, lastInCategory + 1),
+      block,
+      ...blocks.slice(lastInCategory + 1),
+    ]
+  }
+  return [...blocks, block]
+}
+
+function blockInSection(
+  block: ContentBlock,
+  categoryId: string | null,
+  categoryIds: Set<string>,
+): boolean {
+  if (categoryId === null) {
+    return !block.categoryId || !categoryIds.has(block.categoryId)
+  }
+  return block.categoryId === categoryId
+}
+
+/** Reorder blocks within one category/intro section without scrambling other sections. */
+function reorderBlocksInSection(
+  blocks: ContentBlock[],
+  categoryId: string | null,
+  categoryIds: Set<string>,
+  activeId: string,
+  overId: string,
+): ContentBlock[] {
+  const sectionBlocks = blocks.filter((b) => blockInSection(b, categoryId, categoryIds))
+  const from = sectionBlocks.findIndex((b) => b.id === activeId)
+  const to = sectionBlocks.findIndex((b) => b.id === overId)
+  if (from < 0 || to < 0 || from === to) return blocks
+  const reordered = arrayMove(sectionBlocks, from, to)
+  let i = 0
+  return blocks.map((b) =>
+    blockInSection(b, categoryId, categoryIds) ? reordered[i++]! : b,
+  )
+}
+
+function moveBlockInSection(
+  blocks: ContentBlock[],
+  categoryId: string | null,
+  categoryIds: Set<string>,
+  blockId: string,
+  direction: -1 | 1,
+): ContentBlock[] {
+  const sectionBlocks = blocks.filter((b) => blockInSection(b, categoryId, categoryIds))
+  const from = sectionBlocks.findIndex((b) => b.id === blockId)
+  const to = from + direction
+  if (from < 0 || to < 0 || to >= sectionBlocks.length) return blocks
+  return reorderBlocksInSection(
+    blocks,
+    categoryId,
+    categoryIds,
+    blockId,
+    sectionBlocks[to]!.id,
+  )
+}
+
 function SortableBlock({
   block,
   children,
   onRemove,
   categories,
   onCategoryChange,
+  sectionIndex,
+  sectionTotal,
+  onMoveInSection,
 }: {
   block: ContentBlock
   children: React.ReactNode
   onRemove: () => void
   categories?: { id: string; name: string }[]
   onCategoryChange?: (categoryId: string | null) => void
+  sectionIndex?: number
+  sectionTotal?: number
+  onMoveInSection?: (direction: -1 | 1) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
   })
+  const canReorder = typeof sectionIndex === 'number' && typeof sectionTotal === 'number' && onMoveInSection
 
   return (
     <div
@@ -527,8 +640,33 @@ function SortableBlock({
               ? ' · fillable'
               : ' · static'
             : null}
+          <span className="font-normal normal-case text-muted-foreground">· drag to reorder</span>
         </button>
         <div className="flex items-center gap-2">
+          {canReorder ? (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={sectionIndex === 0}
+                aria-label="Move block up in this section"
+                onClick={() => onMoveInSection(-1)}
+              >
+                <ChevronUp className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={sectionIndex >= sectionTotal - 1}
+                aria-label="Move block down in this section"
+                onClick={() => onMoveInSection(1)}
+              >
+                <ChevronDown className="size-3.5" />
+              </Button>
+            </div>
+          ) : null}
           {categories && categories.length > 0 && onCategoryChange ? (
             <select
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
@@ -1043,10 +1181,12 @@ function BlockFields({
         <div>
           <Label>Markdown</Label>
           <Textarea
-            className="mt-1.5 min-h-[140px]"
+            className="mt-1.5 min-h-[140px] font-mono text-sm"
             value={block.markdown}
             onChange={(e) => onChange({ ...block, markdown: e.target.value })}
-            placeholder="Write the essay or explanation. Use blank lines between paragraphs."
+            placeholder={
+              '## Heading\n\nWrite with **bold**, *italic*, lists:\n\n- item one\n- item two\n\n[Link text](https://example.com)'
+            }
           />
         </div>
       )
@@ -2418,6 +2558,8 @@ export function PartContentEditor({
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [showPalette, setShowPalette] = useState(false)
+  /** null = intro / before categories; string = category id */
+  const [paletteCategoryId, setPaletteCategoryId] = useState<string | null>(null)
   const [doc, setDoc] = useState<LessonPartContent>(() =>
     normalizePartContent(part, initialContent),
   )
@@ -2458,7 +2600,47 @@ export function PartContentEditor({
     setDoc((prev) => {
       const oldIndex = prev.blocks.findIndex((b) => b.id === active.id)
       const newIndex = prev.blocks.findIndex((b) => b.id === over.id)
-      return { ...prev, blocks: arrayMove(prev.blocks, oldIndex, newIndex) }
+      if (oldIndex < 0 || newIndex < 0) return prev
+
+      const activeBlock = prev.blocks[oldIndex]!
+      const overBlock = prev.blocks[newIndex]!
+      const categoryIds = new Set(
+        prev.part === 'practice' || prev.part === 'language_lesson'
+          ? (prev.categories ?? []).map((c) => c.id)
+          : [],
+      )
+
+      const activeSectionId =
+        activeBlock.categoryId && categoryIds.has(activeBlock.categoryId)
+          ? activeBlock.categoryId
+          : null
+      const overSectionId =
+        overBlock.categoryId && categoryIds.has(overBlock.categoryId)
+          ? overBlock.categoryId
+          : null
+
+      // Same section: reorder only within that category / intro group.
+      if (activeSectionId === overSectionId) {
+        return {
+          ...prev,
+          blocks: reorderBlocksInSection(
+            prev.blocks,
+            activeSectionId,
+            categoryIds,
+            String(active.id),
+            String(over.id),
+          ),
+        }
+      }
+
+      // Cross-section: move into the target section and place next to the drop target.
+      const moved = prev.blocks.map((b) =>
+        b.id === active.id ? { ...b, categoryId: overSectionId } : b,
+      )
+      const from = moved.findIndex((b) => b.id === active.id)
+      const to = moved.findIndex((b) => b.id === over.id)
+      if (from < 0 || to < 0) return { ...prev, blocks: moved }
+      return { ...prev, blocks: arrayMove(moved, from, to) }
     })
   }
 
@@ -2623,84 +2805,8 @@ export function PartContentEditor({
                   Add example + markdown
                 </Button>
               ) : null}
-              <Button type="button" size="sm" variant="outline" onClick={() => setShowPalette((v) => !v)}>
-                <Plus className="mr-1 size-3.5" />
-                Add block
-              </Button>
             </div>
           </div>
-
-          {showPalette ? (
-            <div className="grid gap-2 rounded-xl border border-cream-300 bg-cream-50 p-3 sm:grid-cols-2">
-              {catalog.map((item, i) => (
-                <button
-                  key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
-                  type="button"
-                  className="rounded-lg border border-cream-300 bg-white px-3 py-2 text-left hover:border-gold-400"
-                  onClick={() => {
-                    setDoc((prev) => ({
-                      ...prev,
-                      // New blocks stay before categories until assigned
-                      blocks: [...prev.blocks, createBlock(item.type as ContentBlockType, item.createOptions)],
-                    }))
-                    setShowPalette(false)
-                  }}
-                >
-                  <p className="text-sm font-medium text-green-900">{item.label}</p>
-                  <p className="text-xs text-green-600">{item.description}</p>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={doc.blocks.map((b) => b.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-3">
-                {doc.blocks.map((block) => (
-                  <SortableBlock
-                    key={block.id}
-                    block={block}
-                    categories={
-                      doc.part === 'practice' || doc.part === 'language_lesson'
-                        ? doc.categories
-                        : undefined
-                    }
-                    onCategoryChange={
-                      doc.part === 'practice' || doc.part === 'language_lesson'
-                        ? (categoryId) =>
-                            setDoc((prev) => ({
-                              ...prev,
-                              blocks: prev.blocks.map((b) =>
-                                b.id === block.id ? { ...b, categoryId } : b,
-                              ),
-                            }))
-                        : undefined
-                    }
-                    onRemove={() =>
-                      setDoc((prev) => ({
-                        ...prev,
-                        blocks: prev.blocks.filter((b) => b.id !== block.id),
-                      }))
-                    }
-                  >
-                    <BlockFields
-                      block={block}
-                      vocabularyOptions={vocabularyOptions}
-                      onChange={(next) =>
-                        setDoc((prev) => ({
-                          ...prev,
-                          blocks: updateBlock(prev.blocks, block.id, next),
-                        }))
-                      }
-                    />
-                  </SortableBlock>
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
 
           {doc.part === 'practice' || doc.part === 'language_lesson' ? (
             <PracticeCategoriesEditor
@@ -2726,6 +2832,243 @@ export function PartContentEditor({
               }
             />
           ) : null}
+
+          {(() => {
+            const supportsCategories =
+              doc.part === 'practice' || doc.part === 'language_lesson'
+            const categories = supportsCategories ? (doc.categories ?? []) : []
+            const categoryIds = new Set(categories.map((c) => c.id))
+            const introBlocks = doc.blocks.filter(
+              (b) => !b.categoryId || !categoryIds.has(b.categoryId),
+            )
+            const sections: {
+              key: string
+              title: string
+              categoryId: string | null
+              blocks: ContentBlock[]
+              editable?: boolean
+            }[] =
+              categories.length === 0
+                ? [
+                    {
+                      key: 'all',
+                      title: 'All blocks',
+                      categoryId: null,
+                      blocks: doc.blocks,
+                    },
+                  ]
+                : [
+                    {
+                      key: 'intro',
+                      title: 'Before categories',
+                      categoryId: null,
+                      blocks: introBlocks,
+                    },
+                    ...categories.map((cat) => ({
+                      key: cat.id,
+                      title: cat.name || 'Untitled category',
+                      categoryId: cat.id as string | null,
+                      blocks: doc.blocks.filter((b) => b.categoryId === cat.id),
+                      editable: true,
+                    })),
+                  ]
+
+            function openPalette(categoryId: string | null) {
+              if (showPalette && paletteCategoryId === categoryId) {
+                setShowPalette(false)
+                return
+              }
+              setPaletteCategoryId(categoryId)
+              setShowPalette(true)
+            }
+
+            function renderBlockCard(block: ContentBlock, sectionIndex: number, section: {
+              categoryId: string | null
+              blocks: ContentBlock[]
+            }) {
+              return (
+                <SortableBlock
+                  key={block.id}
+                  block={block}
+                  sectionIndex={sectionIndex}
+                  sectionTotal={section.blocks.length}
+                  onMoveInSection={(direction) =>
+                    setDoc((prev) => ({
+                      ...prev,
+                      blocks: moveBlockInSection(
+                        prev.blocks,
+                        section.categoryId,
+                        categoryIds,
+                        block.id,
+                        direction,
+                      ),
+                    }))
+                  }
+                  categories={supportsCategories ? categories : undefined}
+                  onCategoryChange={
+                    supportsCategories
+                      ? (categoryId) =>
+                          setDoc((prev) => ({
+                            ...prev,
+                            blocks: prev.blocks.map((b) =>
+                              b.id === block.id ? { ...b, categoryId } : b,
+                            ),
+                          }))
+                      : undefined
+                  }
+                  onRemove={() =>
+                    setDoc((prev) => ({
+                      ...prev,
+                      blocks: prev.blocks.filter((b) => b.id !== block.id),
+                    }))
+                  }
+                >
+                  <BlockFields
+                    block={block}
+                    vocabularyOptions={vocabularyOptions}
+                    onChange={(next) =>
+                      setDoc((prev) => ({
+                        ...prev,
+                        blocks: updateBlock(prev.blocks, block.id, next),
+                      }))
+                    }
+                  />
+                </SortableBlock>
+              )
+            }
+
+            return (
+              <>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={onDragEnd}
+                >
+                  <div className="space-y-4">
+                    {sections.map((section) => (
+                      <section
+                        key={section.key}
+                        className="rounded-xl border border-cream-300 bg-cream-50/60 p-3"
+                      >
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+                          <div className="min-w-0 flex-1">
+                            {section.editable && section.categoryId ? (
+                              <div className="space-y-1">
+                                <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                                  Category section
+                                </p>
+                                <Input
+                                  className="h-9 max-w-sm bg-white font-display text-base text-green-900"
+                                  value={
+                                    categories.find((c) => c.id === section.categoryId)?.name ??
+                                    ''
+                                  }
+                                  onChange={(e) =>
+                                    setDoc((prev) => {
+                                      if (
+                                        prev.part !== 'practice' &&
+                                        prev.part !== 'language_lesson'
+                                      ) {
+                                        return prev
+                                      }
+                                      return {
+                                        ...prev,
+                                        categories: (prev.categories ?? []).map((c) =>
+                                          c.id === section.categoryId
+                                            ? { ...c, name: e.target.value }
+                                            : c,
+                                        ),
+                                      }
+                                    })
+                                  }
+                                  aria-label="Edit category name"
+                                />
+                              </div>
+                            ) : (
+                              <h4 className="font-display text-base text-green-900">
+                                {section.title}
+                              </h4>
+                            )}
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {section.blocks.length} block
+                              {section.blocks.length === 1 ? '' : 's'}
+                              {section.blocks.length > 1
+                                ? ' · drag or use arrows to reorder inside this section'
+                                : section.editable
+                                  ? " · edit this category's content below"
+                                  : null}
+                            </p>
+                          </div>
+                        </div>
+
+                        <SortableContext
+                          items={section.blocks.map((b) => b.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-3">
+                            {section.blocks.length === 0 ? (
+                              <p className="rounded-lg border border-dashed border-cream-400 bg-white/70 px-3 py-4 text-sm text-muted-foreground">
+                                No blocks in this section yet.
+                              </p>
+                            ) : (
+                              section.blocks.map((block, sectionIndex) =>
+                                renderBlockCard(block, sectionIndex, section),
+                              )
+                            )}
+                          </div>
+                        </SortableContext>
+
+                        <div className="mt-3 space-y-2 border-t border-cream-300 pt-3">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="w-full border-dashed border-cream-400 bg-white"
+                            onClick={() => openPalette(section.categoryId)}
+                          >
+                            <Plus className="mr-1 size-3.5" />
+                            Add block
+                            {section.editable ? ` to ${section.title || 'category'}` : ''}
+                          </Button>
+
+                          {showPalette && paletteCategoryId === section.categoryId ? (
+                            <div className="grid gap-2 rounded-xl border border-cream-300 bg-white p-3 sm:grid-cols-2">
+                              {catalog.map((item, i) => (
+                                <button
+                                  key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
+                                  type="button"
+                                  className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-left hover:border-gold-400"
+                                  onClick={() => {
+                                    setDoc((prev) => ({
+                                      ...prev,
+                                      blocks: insertBlockForCategory(
+                                        prev.blocks,
+                                        createBlock(
+                                          item.type as ContentBlockType,
+                                          item.createOptions,
+                                        ),
+                                        section.categoryId,
+                                      ),
+                                    }))
+                                    setShowPalette(false)
+                                  }}
+                                >
+                                  <p className="text-sm font-medium text-green-900">
+                                    {item.label}
+                                  </p>
+                                  <p className="text-xs text-green-600">{item.description}</p>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </DndContext>
+              </>
+            )
+          })()}
         </div>
 
         <div className="xl:sticky xl:top-4 xl:self-start">

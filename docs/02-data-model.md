@@ -37,7 +37,7 @@ create type live_status       as enum ('not_booked','booked','completed');
 create type exercise_type     as enum ('fill_blank','translate_en_am','translate_am_en','matching','multiple_choice','word_order','speaking','roleplay');
 create type question_type     as enum ('multiple_choice','true_false','fill_blank','matching','short_answer');
 create type homework_status   as enum ('assigned','submitted','reviewed','needs_resubmission');
-create type session_status    as enum ('scheduled','completed','cancelled','no_show');
+create type session_status    as enum ('pending','scheduled','completed','cancelled','no_show');
 create type entitlement_scope  as enum ('level','unit');
 create type entitlement_source as enum ('admin_grant','trial','purchase','promo','staff');
 create type entitlement_status as enum ('active','expired','revoked');

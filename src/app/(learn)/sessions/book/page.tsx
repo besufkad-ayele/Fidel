@@ -73,7 +73,7 @@ export default async function Page({
       .from('sessions')
       .select('scheduled_at, duration_minutes, student_note')
       .eq('teacher_id', selectedTeacherId)
-      .eq('status', 'scheduled')
+      .in('status', ['pending', 'scheduled'])
       .gte('scheduled_at', now.toISOString())
       .lte('scheduled_at', horizonEnd.toISOString())
       .order('scheduled_at', { ascending: true }),

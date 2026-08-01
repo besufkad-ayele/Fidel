@@ -70,8 +70,8 @@ export default async function AdminHomeworkPage() {
               </select>
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="isUnitDefault" defaultChecked />
-              Unit default template
+              <input type="checkbox" name="isUnitDefault" />
+              Unit default template (requires a unit)
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="allowAudio" defaultChecked />

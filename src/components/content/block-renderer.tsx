@@ -22,6 +22,7 @@ import {
 } from '@/components/content/interactive/fillable-table'
 import { HomeworkSubmission } from '@/components/content/interactive/homework-submission'
 import { PracticeCategoryTabs } from '@/components/features/learn/practice-category-tabs'
+import { SimpleMarkdown } from '@/components/shared/simple-markdown'
 
 export type VocabLookup = Record<
   string,
@@ -46,41 +47,6 @@ type BlockRendererProps = {
   /** When set, homework_prompt blocks can save a real submission. */
   assignmentId?: string
   alreadySubmitted?: boolean
-}
-
-function MarkdownBody({ text }: { text: string }) {
-  const paragraphs = text.split(/\n{2,}/).filter(Boolean)
-  return (
-    <div className="space-y-3 text-sm leading-relaxed text-green-900">
-      {paragraphs.map((p, i) => {
-        if (p.startsWith('## ')) {
-          return (
-            <h3 key={i} className="pt-2 font-display text-lg text-green-800">
-              {p.slice(3)}
-            </h3>
-          )
-        }
-        if (p.startsWith('# ')) {
-          return (
-            <h2 key={i} className="pt-2 font-display text-xl text-green-900">
-              {p.slice(2)}
-            </h2>
-          )
-        }
-        if (p.startsWith('- ')) {
-          const items = p.split('\n').filter((l) => l.startsWith('- '))
-          return (
-            <ul key={i} className="list-disc space-y-1.5 pl-5 text-green-800">
-              {items.map((item, j) => (
-                <li key={j}>{item.slice(2)}</li>
-              ))}
-            </ul>
-          )
-        }
-        return <p key={i}>{p}</p>
-      })}
-    </div>
-  )
 }
 
 function vocabAudio(w: VocabLookup[string]) {
@@ -112,7 +78,7 @@ function renderBlock(
       )
     }
     case 'rich_text':
-      return <MarkdownBody text={block.markdown || ''} />
+      return <SimpleMarkdown text={block.markdown || ''} />
     case 'image': {
       const src = lessonMediaPublicUrl(block.url) || block.url
       return src ? (
@@ -697,15 +663,6 @@ export function BlockRenderer({
   return (
     <AudioPlaybackProvider>
       <article className={cn('space-y-6', className)}>
-        {content.part === 'cultural_insight' && content.hookQuestion ? (
-          <div className="rounded-xl border border-gold-300 bg-gold-50 p-4">
-            <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
-              Think about this
-            </p>
-            <p className="mt-1 font-display text-lg text-green-900">{content.hookQuestion}</p>
-          </div>
-        ) : null}
-
         {content.title ? (
           <header>
             <span className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
@@ -717,6 +674,15 @@ export function BlockRenderer({
             </span>
             <h1 className="mt-1 font-display text-3xl text-green-900">{content.title}</h1>
           </header>
+        ) : null}
+
+        {content.part === 'cultural_insight' && content.hookQuestion ? (
+          <div className="rounded-xl border border-gold-300 bg-gold-50 p-4">
+            <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+              Think about this
+            </p>
+            <p className="mt-1 font-display text-lg text-green-900">{content.hookQuestion}</p>
+          </div>
         ) : null}
 
         {beforeBlocks.map((block) => (

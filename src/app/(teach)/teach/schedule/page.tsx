@@ -9,8 +9,15 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   teacherApproveSessionAction,
   teacherProposeSessionAction,
+  teacherCancelSessionAction,
+  markSessionHappenedAction,
 } from '@/app/(learn)/sessions/actions'
 import { FALLBACK_SLOT_HOURS, slotsForDay, zonedCivilToUtcIso, minutesToTime, civilDateInTimezone } from '@/lib/domain/availability'
+import {
+  isConfirmedUpcoming,
+  isPendingApproval,
+  needsHappenedConfirmation,
+} from '@/lib/domain/sessions'
 
 export const metadata: Metadata = { title: 'Schedule' }
 
@@ -30,7 +37,7 @@ function slotLabel(date: Date, timeZone?: string) {
 export default async function Page({
   searchParams: searchParamsPromise,
 }: {
-  searchParams: Promise<{ day?: string }>
+  searchParams: Promise<{ day?: string; error?: string }>
 }) {
   const searchParams = await searchParamsPromise
   const { user, profile: teacher } = await requireRole('teacher')
@@ -53,9 +60,9 @@ export default async function Page({
   const [{ data: sessions }, { data: availability }, { data: timeOff }] = await Promise.all([
     db
       .from('sessions')
-      .select('id, student_id, scheduled_at, duration_minutes, status, student_note')
+      .select('id, student_id, scheduled_at, duration_minutes, status, student_note, meet_link')
       .eq('teacher_id', teacher.id)
-      .eq('status', 'scheduled')
+      .in('status', ['pending', 'scheduled'])
       .gte('scheduled_at', rangeStartIso)
       .lte('scheduled_at', rangeEndIso),
     supabase
@@ -124,15 +131,28 @@ export default async function Page({
 
   const { data: upcomingSessions } = await db
     .from('sessions')
-    .select('id, student_id, scheduled_at, duration_minutes, status, student_note, session_notes')
+    .select(
+      'id, student_id, scheduled_at, duration_minutes, status, meet_link, student_note, session_notes',
+    )
     .eq('teacher_id', teacher.id)
-    .eq('status', 'scheduled')
-    .gte('scheduled_at', now.toISOString())
-    .lte('scheduled_at', new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
+    .in('status', ['pending', 'scheduled'])
     .order('scheduled_at', { ascending: true })
-    .limit(5)
+    .limit(20)
 
-  const studentIds = Array.from(new Set((upcomingSessions ?? []).map((s: any) => s.student_id)))
+  const actionableSessions = ((upcomingSessions ?? []) as Array<{
+    id: string
+    student_id: string
+    scheduled_at: string
+    duration_minutes: number
+    status: string
+    meet_link: string | null
+    student_note: string | null
+    session_notes: string | null
+  }>).filter(
+    (s) => isPendingApproval(s) || isConfirmedUpcoming(s) || needsHappenedConfirmation(s),
+  )
+
+  const studentIds = Array.from(new Set(actionableSessions.map((s) => s.student_id)))
   const { data: studentProfiles } = studentIds.length
     ? await db.from('profiles').select('id, full_name, email').in('id', studentIds)
     : { data: [] as { id: string; full_name: string; email: string }[] }
@@ -149,7 +169,7 @@ export default async function Page({
     ? await db
         .from('sessions')
         .select('id, student_id, teacher_id, scheduled_at, duration_minutes, status')
-        .eq('status', 'scheduled')
+        .in('status', ['pending', 'scheduled'])
         .in('student_id', studentIds)
         .gte('scheduled_at', now.toISOString())
         .lte('scheduled_at', new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
@@ -245,15 +265,30 @@ export default async function Page({
         </div>
       </div>
 
+      {searchParams.error === 'meet_link_required' ? (
+        <p className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+          Paste a Meet link (https://…) before approving a booking.
+        </p>
+      ) : null}
+      {searchParams.error === 'not_ended' ? (
+        <p className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+          You can mark a session as happened after the scheduled end time.
+        </p>
+      ) : null}
+
       {/* Session actions */}
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-4">
-          {(upcomingSessions ?? []).length === 0 ? (
+          {actionableSessions.length === 0 ? (
             <div className="rounded-xl border border-cream-300 bg-cream-50 p-6 text-sm text-muted-foreground">
-              No upcoming session requests in the next 7 days.
+              No pending or active sessions. Completed and cancelled sessions are cleared from this list.
             </div>
           ) : (
-            (upcomingSessions ?? []).map((s: any) => (
+            actionableSessions.map((s) => {
+              const pending = isPendingApproval(s)
+              const needsConfirm = needsHappenedConfirmation(s)
+              const upcoming = isConfirmedUpcoming(s)
+              return (
               <div key={s.id} className="rounded-xl border border-cream-300 bg-cream-50 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -263,7 +298,9 @@ export default async function Page({
                       Current time: {new Date(s.scheduled_at).toLocaleString()}
                     </p>
                   </div>
-                  <span className="text-xs uppercase text-muted-foreground">Scheduled</span>
+                  <span className="text-xs uppercase text-muted-foreground">
+                    {pending ? 'Pending' : needsConfirm ? 'Confirm' : 'Scheduled'}
+                  </span>
                 </div>
 
                 {s.student_note ? (
@@ -272,15 +309,52 @@ export default async function Page({
                   </p>
                 ) : null}
 
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {upcoming && s.meet_link ? (
+                    <Button asChild size="sm">
+                      <a href={s.meet_link} target="_blank" rel="noopener noreferrer">
+                        Join Meet
+                      </a>
+                    </Button>
+                  ) : null}
+                  {needsConfirm ? (
+                    <form action={markSessionHappenedAction}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <Button type="submit" size="sm">
+                        Mark as happened
+                      </Button>
+                    </form>
+                  ) : null}
+                  {!needsConfirm ? (
+                    <form action={teacherCancelSessionAction} className="flex items-center gap-2">
+                      <input type="hidden" name="id" value={s.id} />
+                      <Input name="note" placeholder="Cancel reason" className="h-8 w-40" />
+                      <Button type="submit" size="sm" variant="outline">
+                        Cancel
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
+
+                {pending ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <form action={teacherApproveSessionAction} className="space-y-2 rounded-lg border border-cream-300 bg-cream-100/50 p-3">
                     <input type="hidden" name="id" value={s.id} />
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Google Meet link</p>
+                      <Input
+                        name="meetLink"
+                        placeholder="https://meet.google.com/abc-defg-hij"
+                        className="mt-1"
+                        required
+                      />
+                    </div>
                     <div>
                       <p className="text-xs font-medium text-muted-foreground">Approval note</p>
                       <Input name="note" placeholder="e.g. Exam prep check" className="mt-1" />
                     </div>
                     <Button type="submit" size="sm">
-                      Approve
+                      Approve &amp; add Meet
                     </Button>
                   </form>
 
@@ -327,6 +401,7 @@ export default async function Page({
                     </Button>
                   </form>
                 </div>
+                ) : null}
 
                 {/* Student schedule context */}
                 <div className="mt-4 rounded-lg border border-cream-300 bg-cream-50 p-3">
@@ -344,7 +419,7 @@ export default async function Page({
                   </div>
                 </div>
               </div>
-            ))
+            )})
           )}
         </div>
 

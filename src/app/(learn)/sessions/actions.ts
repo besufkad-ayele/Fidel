@@ -2,12 +2,23 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { requireRole } from '@/lib/auth/guards'
+import { requireAuth, requireRole } from '@/lib/auth/guards'
 import { createAdminDb, writeAudit } from '@/lib/admin/db'
+import { getCurrentProfile } from '@/lib/auth/session'
 import { isOpenSlot } from '@/lib/domain/availability'
+import { normalizeMeetLink, sessionHasEnded } from '@/lib/domain/sessions'
 
 function nowIso() {
   return new Date().toISOString()
+}
+
+function revalidateSessionPaths() {
+  revalidatePath('/sessions')
+  revalidatePath('/sessions/book')
+  revalidatePath('/dashboard')
+  revalidatePath('/teach')
+  revalidatePath('/teach/schedule')
+  revalidatePath('/admin/sessions')
 }
 
 export async function bookSessionAction(formData: FormData): Promise<void> {
@@ -23,7 +34,7 @@ export async function bookSessionAction(formData: FormData): Promise<void> {
   const durationMinutes = 60
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000)
 
-  const db = await createAdminDb()
+  const db = createAdminDb()
 
   const [{ data: teacherProfile }, { data: availability }, { data: timeOff }] = await Promise.all([
     db.from('profiles').select('timezone').eq('id', teacherId).maybeSingle(),
@@ -75,7 +86,7 @@ export async function bookSessionAction(formData: FormData): Promise<void> {
     .from('sessions')
     .select('id, scheduled_at, duration_minutes')
     .eq('teacher_id', teacherId)
-    .eq('status', 'scheduled')
+    .in('status', ['pending', 'scheduled'])
     .gte('scheduled_at', new Date(start.getTime() - durationMinutes * 60 * 1000).toISOString())
     .lte('scheduled_at', end.toISOString())
 
@@ -93,16 +104,17 @@ export async function bookSessionAction(formData: FormData): Promise<void> {
       teacher_id: teacherId,
       scheduled_at: start.toISOString(),
       duration_minutes: durationMinutes,
-      status: 'scheduled',
+      student_timezone: profile.timezone || 'Africa/Addis_Ababa',
+      status: 'pending',
       student_note: note,
-      session_notes: 'Pending teacher confirmation',
+      session_notes: null,
+      meet_link: null,
       created_at: nowIso(),
       updated_at: nowIso(),
     })
     if (error) throw new Error(error.message)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Booking failed'
-    // Keep user-facing error stable; details go to server console.
     console.error('[bookSessionAction] failed', msg)
     redirect(`/sessions/book?error=booking_failed&teacherId=${teacherId}`)
   }
@@ -116,10 +128,7 @@ export async function bookSessionAction(formData: FormData): Promise<void> {
     metadata: { teacherId },
   })
 
-  revalidatePath('/sessions')
-  revalidatePath('/sessions/book')
-  revalidatePath('/teach')
-  revalidatePath('/teach/schedule')
+  revalidateSessionPaths()
   redirect('/sessions')
 }
 
@@ -128,17 +137,21 @@ export async function cancelStudentSessionAction(formData: FormData): Promise<vo
   const id = String(formData.get('id') ?? '')
   const reason = String(formData.get('reason') ?? '').trim() || 'Cancelled by student'
   if (!id) return
-  const db = await createAdminDb()
+  const db = createAdminDb()
 
   const { error } = await db
     .from('sessions')
     .update({
       status: 'cancelled',
+      cancelled_by: user.id,
+      cancelled_at: nowIso(),
+      cancellation_reason: reason,
       session_notes: reason,
       updated_at: nowIso(),
     })
     .eq('id', id)
     .eq('student_id', user.id)
+    .in('status', ['pending', 'scheduled'])
   if (error) throw new Error(error.message)
 
   await writeAudit({
@@ -150,27 +163,43 @@ export async function cancelStudentSessionAction(formData: FormData): Promise<vo
     metadata: { reason, by: 'student' },
   })
 
-  revalidatePath('/sessions')
-  revalidatePath('/teach')
-  revalidatePath('/admin/sessions')
+  revalidateSessionPaths()
 }
 
 export async function teacherApproveSessionAction(formData: FormData): Promise<void> {
   const { user, profile } = await requireRole('teacher')
   const id = String(formData.get('id') ?? '')
   const note = String(formData.get('note') ?? '').trim()
+  const meetLink = normalizeMeetLink(String(formData.get('meetLink') ?? ''))
   if (!id) return
-  const db = await createAdminDb()
+  if (!meetLink) {
+    redirect(`/teach/schedule?error=meet_link_required&session=${id}`)
+  }
+
+  const db = createAdminDb()
+
+  const { data: existing, error: loadError } = await db
+    .from('sessions')
+    .select('id, status')
+    .eq('id', id)
+    .eq('teacher_id', user.id)
+    .maybeSingle()
+  if (loadError) throw new Error(loadError.message)
+  if (!existing || existing.status !== 'pending') {
+    redirect(`/teach/schedule?error=not_pending&session=${id}`)
+  }
 
   const { error } = await db
     .from('sessions')
     .update({
       status: 'scheduled',
+      meet_link: meetLink,
       session_notes: note ? `Approved: ${note}` : 'Approved by teacher',
       updated_at: nowIso(),
     })
     .eq('id', id)
     .eq('teacher_id', user.id)
+    .eq('status', 'pending')
   if (error) throw new Error(error.message)
 
   await writeAudit({
@@ -179,9 +208,9 @@ export async function teacherApproveSessionAction(formData: FormData): Promise<v
     action: 'session.approve',
     entityType: 'session',
     entityId: id,
+    metadata: { meetLink },
   })
-  revalidatePath('/teach')
-  revalidatePath('/sessions')
+  revalidateSessionPaths()
 }
 
 export async function teacherProposeSessionAction(formData: FormData): Promise<void> {
@@ -194,19 +223,23 @@ export async function teacherProposeSessionAction(formData: FormData): Promise<v
 
   const proposedFromIso = proposedFromAt || proposedAtLegacy
   if (!id || !proposedFromIso) throw new Error('New time is required')
-  const db = await createAdminDb()
+  const db = createAdminDb()
 
   const from = new Date(proposedFromIso)
   if (Number.isNaN(from.getTime())) throw new Error('Invalid proposedFromAt')
 
   const to = proposedToAt ? new Date(proposedToAt) : new Date(from.getTime() + 60 * 60 * 1000)
-  const toIso = Number.isNaN(to.getTime()) ? new Date(from.getTime() + 60 * 60 * 1000).toISOString() : to.toISOString()
+  const toIso = Number.isNaN(to.getTime())
+    ? new Date(from.getTime() + 60 * 60 * 1000).toISOString()
+    : to.toISOString()
 
   const { error } = await db
     .from('sessions')
     .update({
       scheduled_at: from.toISOString(),
-      status: 'scheduled',
+      // Keep pending until teacher also attaches a Meet link via Approve.
+      status: 'pending',
+      meet_link: null,
       session_notes: note
         ? `Teacher proposed time window: ${from.toISOString()} → ${toIso}. Note: ${note}`
         : `Teacher proposed time window: ${from.toISOString()} → ${toIso}`,
@@ -214,6 +247,7 @@ export async function teacherProposeSessionAction(formData: FormData): Promise<v
     })
     .eq('id', id)
     .eq('teacher_id', user.id)
+    .in('status', ['pending', 'scheduled'])
   if (error) throw new Error(error.message)
 
   await writeAudit({
@@ -224,8 +258,7 @@ export async function teacherProposeSessionAction(formData: FormData): Promise<v
     entityId: id,
     metadata: { proposedFromAt: from.toISOString(), proposedToAt: toIso },
   })
-  revalidatePath('/teach')
-  revalidatePath('/sessions')
+  revalidateSessionPaths()
 }
 
 export async function teacherCancelSessionAction(formData: FormData): Promise<void> {
@@ -233,17 +266,21 @@ export async function teacherCancelSessionAction(formData: FormData): Promise<vo
   const id = String(formData.get('id') ?? '')
   const note = String(formData.get('note') ?? '').trim() || 'Cancelled by teacher'
   if (!id) return
-  const db = await createAdminDb()
+  const db = createAdminDb()
 
   const { error } = await db
     .from('sessions')
     .update({
       status: 'cancelled',
+      cancelled_by: user.id,
+      cancelled_at: nowIso(),
+      cancellation_reason: note,
       session_notes: note,
       updated_at: nowIso(),
     })
     .eq('id', id)
     .eq('teacher_id', user.id)
+    .in('status', ['pending', 'scheduled'])
   if (error) throw new Error(error.message)
 
   await writeAudit({
@@ -254,7 +291,58 @@ export async function teacherCancelSessionAction(formData: FormData): Promise<vo
     entityId: id,
     metadata: { by: 'teacher', note },
   })
-  revalidatePath('/teach')
-  revalidatePath('/sessions')
-  revalidatePath('/admin/sessions')
+  revalidateSessionPaths()
+}
+
+export async function markSessionHappenedAction(formData: FormData): Promise<void> {
+  const user = await requireAuth()
+  const profile = await getCurrentProfile()
+  if (!profile || !profile.is_active) redirect('/login')
+  if (profile.role !== 'student' && profile.role !== 'teacher') redirect('/login')
+
+  const id = String(formData.get('id') ?? '')
+  if (!id) return
+
+  const db = createAdminDb()
+  const { data: session, error: loadError } = await db
+    .from('sessions')
+    .select('id, student_id, teacher_id, scheduled_at, duration_minutes, status')
+    .eq('id', id)
+    .maybeSingle()
+  if (loadError) throw new Error(loadError.message)
+  if (!session || session.status !== 'scheduled') return
+
+  const isOwner =
+    (profile.role === 'student' && session.student_id === user.id) ||
+    (profile.role === 'teacher' && session.teacher_id === user.id)
+  if (!isOwner) return
+
+  if (!sessionHasEnded(session)) {
+    if (profile.role === 'teacher') {
+      redirect(`/teach/schedule?error=not_ended&session=${id}`)
+    }
+    redirect(`/sessions?error=not_ended&session=${id}`)
+  }
+
+  const { error } = await db
+    .from('sessions')
+    .update({
+      status: 'completed',
+      attended: true,
+      updated_at: nowIso(),
+    })
+    .eq('id', id)
+    .eq('status', 'scheduled')
+  if (error) throw new Error(error.message)
+
+  await writeAudit({
+    actorId: user.id,
+    actorRole: profile.role,
+    action: 'session.complete',
+    entityType: 'session',
+    entityId: id,
+    metadata: { by: profile.role },
+  })
+
+  revalidateSessionPaths()
 }

@@ -117,7 +117,7 @@ export async function removeAvailabilityBlockAction(input: {
     .from('sessions')
     .select('id, scheduled_at, duration_minutes')
     .eq('teacher_id', user.id)
-    .eq('status', 'scheduled')
+    .in('status', ['pending', 'scheduled'])
     .gte('scheduled_at', now.toISOString())
     .lte('scheduled_at', horizon.toISOString())
 

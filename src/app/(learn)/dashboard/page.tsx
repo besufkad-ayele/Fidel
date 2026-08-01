@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   FileText,
+  Video,
 } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { AmharicText } from '@/components/shared/amharic-text'
@@ -15,6 +16,7 @@ import { StatusChip } from '@/components/shared/status-chip'
 import { Button } from '@/components/ui/button'
 import { getCurrentProfile } from '@/lib/auth/session'
 import { listActionableHomeworkForStudent } from '@/lib/data/homework'
+import { listUnconfirmedPastSessionsForUser } from '@/lib/data/sessions'
 import { getCurrentStudentProgress } from '@/lib/data/progress'
 import { LEVELS } from '@/lib/constants/brand'
 import { HA_UNITS, UNIT_PARTS } from '@/lib/constants/curriculum'
@@ -23,9 +25,12 @@ export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function StudentDashboardPage() {
   const profile = await getCurrentProfile()
-  const [progress, actionableHomework] = await Promise.all([
+  const [progress, actionableHomework, unconfirmedSessions] = await Promise.all([
     getCurrentStudentProgress(),
     listActionableHomeworkForStudent(),
+    profile
+      ? listUnconfirmedPastSessionsForUser({ userId: profile.id, role: 'student' })
+      : Promise.resolve([]),
   ])
   const t = await getTranslations('dashboard')
   const firstName = profile?.full_name?.split(/\s+/)[0]
@@ -51,6 +56,10 @@ export default async function StudentDashboardPage() {
     actionableHomework.length === 1
       ? actionableHomework[0]!.title
       : t('attention.homeworkPendingTitle', { count: actionableHomework.length })
+  const sessionConfirmTitle =
+    unconfirmedSessions.length === 1
+      ? t('attention.sessionConfirmTitleOne')
+      : t('attention.sessionConfirmTitle', { count: unconfirmedSessions.length })
 
   return (
     <div className="space-y-8">
@@ -77,6 +86,36 @@ export default async function StudentDashboardPage() {
           </Button>
         </div>
       </header>
+
+      {unconfirmedSessions.length > 0 ? (
+        <Link
+          href={'/sessions' as '/'}
+          className="group flex items-start justify-between gap-4 rounded-xl border-2 border-warning-400 bg-warning-50 p-5 shadow-sm transition-colors hover:bg-warning-100/80"
+        >
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-warning-500/15 text-warning-700">
+              <Video className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-semibold tracking-[0.14em] text-warning-700 uppercase">
+                {t('attention.eyebrow')}
+              </p>
+              <h2 className="font-display text-xl text-green-900 group-hover:text-green-800">
+                {sessionConfirmTitle}
+              </h2>
+              <p className="text-sm text-green-800/80">
+                {unconfirmedSessions.length === 1
+                  ? t('attention.sessionConfirmBodyOne')
+                  : t('attention.sessionConfirmBody', { count: unconfirmedSessions.length })}
+              </p>
+            </div>
+          </div>
+          <span className="mt-1 inline-flex shrink-0 items-center gap-1 text-sm font-medium text-warning-700">
+            {t('attention.sessionConfirmCta')}
+            <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      ) : null}
 
       {actionableHomework.length > 0 ? (
         <Link

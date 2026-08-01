@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Sun,
   BookOpenCheck,
+  Video,
 } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { AttentionRow } from '@/components/shared/attention-row'
@@ -16,11 +17,32 @@ import { Input } from '@/components/ui/input'
 import { getCurrentProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import {
+  listPendingApprovalsForTeacher,
+  listUnconfirmedPastSessionsForUser,
+} from '@/lib/data/sessions'
+import {
+  isConfirmedUpcoming,
+  isPendingApproval,
+  needsHappenedConfirmation,
+} from '@/lib/domain/sessions'
+import {
   teacherApproveSessionAction,
   teacherCancelSessionAction,
+  markSessionHappenedAction,
 } from '@/app/(learn)/sessions/actions'
 
 export const metadata: Metadata = { title: 'Today' }
+
+type SessionRow = {
+  id: string
+  student_id: string
+  scheduled_at: string
+  duration_minutes: number
+  status: string
+  meet_link: string | null
+  student_note: string | null
+  session_notes: string | null
+}
 
 export default async function TeacherTodayPage() {
   const profile = await getCurrentProfile()
@@ -31,34 +53,40 @@ export default async function TeacherTodayPage() {
   const timezone = profile?.timezone || 'Africa/Addis_Ababa'
 
   let studentCount = 0
-  let upcomingSessions: {
-    id: string
-    student_id: string
-    scheduled_at: string
-    status: string
-    student_note: string | null
-    session_notes: string | null
-  }[] = []
+  let upcomingSessions: SessionRow[] = []
+  let pendingApprovals: SessionRow[] = []
+  let needsConfirm: SessionRow[] = []
   let studentMap = new Map<string, string>()
   if (profile) {
     const supabase = await createClient()
-    const [{ count }, sessionsRes] = await Promise.all([
+    const [{ count }, sessionsRes, pending, unconfirmed] = await Promise.all([
       supabase
         .from('student_teacher_assignments')
         .select('id', { count: 'exact', head: true })
         .eq('teacher_id', profile.id),
       supabase
         .from('sessions')
-        .select('id, student_id, scheduled_at, status, student_note, session_notes')
+        .select(
+          'id, student_id, scheduled_at, duration_minutes, status, meet_link, student_note, session_notes',
+        )
         .eq('teacher_id', profile.id)
-        .in('status', ['scheduled', 'cancelled'])
+        .in('status', ['pending', 'scheduled'])
         .order('scheduled_at', { ascending: true })
-        .limit(8),
+        .limit(12),
+      listPendingApprovalsForTeacher(profile.id),
+      listUnconfirmedPastSessionsForUser({ userId: profile.id, role: 'teacher' }),
     ])
     studentCount = count ?? 0
-    upcomingSessions = sessionsRes.data ?? []
+    upcomingSessions = (sessionsRes.data ?? []) as SessionRow[]
+    pendingApprovals = pending as SessionRow[]
+    needsConfirm = unconfirmed as SessionRow[]
 
-    const studentIds = Array.from(new Set(upcomingSessions.map((s) => s.student_id)))
+    const studentIds = Array.from(
+      new Set([
+        ...upcomingSessions.map((s) => s.student_id),
+        ...needsConfirm.map((s) => s.student_id),
+      ]),
+    )
     if (studentIds.length) {
       const { data: students } = await supabase
         .from('profiles')
@@ -74,6 +102,10 @@ export default async function TeacherTodayPage() {
     day: 'numeric',
     timeZone: timezone,
   }).format(new Date())
+
+  const activeSessions = upcomingSessions.filter(
+    (s) => isPendingApproval(s) || isConfirmedUpcoming(s) || needsHappenedConfirmation(s),
+  )
 
   return (
     <div>
@@ -96,7 +128,32 @@ export default async function TeacherTodayPage() {
         </div>
       </header>
 
-      {/* KPI strip */}
+      {(pendingApprovals.length > 0 || needsConfirm.length > 0) && (
+        <section className="mb-8 space-y-3">
+          <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+            {t('attention.eyebrow')}
+          </p>
+          {pendingApprovals.length > 0 ? (
+            <AttentionRow
+              href="/teach/schedule"
+              icon={ClipboardCheck}
+              tone="warning"
+              title={t('attention.pendingTitle', { count: pendingApprovals.length })}
+              description={t('attention.pendingBody')}
+            />
+          ) : null}
+          {needsConfirm.length > 0 ? (
+            <AttentionRow
+              href="/teach/schedule"
+              icon={Video}
+              tone="warning"
+              title={t('attention.confirmTitle', { count: needsConfirm.length })}
+              description={t('attention.confirmBody')}
+            />
+          ) : null}
+        </section>
+      )}
+
       <section className="mb-8 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-cream-300 bg-cream-50 p-5 shadow-card">
           <div className="flex items-center gap-3">
@@ -107,7 +164,9 @@ export default async function TeacherTodayPage() {
               <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                 {t('stats.today')}
               </p>
-              <p className="text-2xl font-semibold text-green-700 tabular-nums">0</p>
+              <p className="text-2xl font-semibold text-green-700 tabular-nums">
+                {activeSessions.filter((s) => isConfirmedUpcoming(s) || isPendingApproval(s)).length}
+              </p>
             </div>
           </div>
         </div>
@@ -120,13 +179,15 @@ export default async function TeacherTodayPage() {
               <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                 {t('stats.review')}
               </p>
-              <p className="text-2xl font-semibold text-green-700 tabular-nums">0</p>
+              <p className="text-2xl font-semibold text-green-700 tabular-nums">
+                {pendingApprovals.length + needsConfirm.length}
+              </p>
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-cream-300 bg-cream-50 p-5 shadow-card">
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-green-50 text-green-600">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-success-50 text-success-500">
               <Users className="size-4" strokeWidth={1.75} />
             </span>
             <div>
@@ -140,7 +201,6 @@ export default async function TeacherTodayPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Today's sessions */}
         <section className="rounded-xl border border-cream-300 bg-cream-50 shadow-card lg:col-span-3">
           <div className="flex items-center justify-between border-b border-cream-300 px-6 py-4">
             <div>
@@ -158,7 +218,7 @@ export default async function TeacherTodayPage() {
           </div>
 
           <div className="flex flex-col items-center px-6 py-14 text-center">
-            {upcomingSessions.length === 0 ? (
+            {activeSessions.length === 0 ? (
               <>
                 <span className="flex size-16 items-center justify-center rounded-2xl border border-cream-300 bg-cream-100 text-green-600">
                   <CalendarDays className="size-7" strokeWidth={1.5} />
@@ -181,48 +241,83 @@ export default async function TeacherTodayPage() {
               </>
             ) : (
               <div className="w-full space-y-3 text-left">
-                {upcomingSessions.map((session) => (
-                  <div key={session.id} className="rounded-lg border border-cream-300 bg-cream-100/70 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium text-green-700">
-                        {studentMap.get(session.student_id) ?? 'Student'} ·{' '}
-                        {new Date(session.scheduled_at).toLocaleString()}
-                      </p>
-                      <span className="text-xs text-muted-foreground uppercase">{session.status}</span>
+                {activeSessions.map((session) => {
+                  const pending = isPendingApproval(session)
+                  const needsConfirmRow = needsHappenedConfirmation(session)
+                  const upcoming = isConfirmedUpcoming(session)
+                  return (
+                    <div key={session.id} className="rounded-lg border border-cream-300 bg-cream-100/70 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium text-green-700">
+                          {studentMap.get(session.student_id) ?? 'Student'} ·{' '}
+                          {new Date(session.scheduled_at).toLocaleString()}
+                        </p>
+                        <span className="text-xs text-muted-foreground uppercase">
+                          {pending ? 'Pending' : needsConfirmRow ? 'Confirm' : 'Scheduled'}
+                        </span>
+                      </div>
+                      {session.student_note ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Student note: {session.student_note}
+                        </p>
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {pending ? (
+                          <form
+                            action={teacherApproveSessionAction}
+                            className="flex flex-wrap items-center gap-2"
+                          >
+                            <input type="hidden" name="id" value={session.id} />
+                            <Input
+                              name="meetLink"
+                              placeholder="https://meet.google.com/..."
+                              className="h-8 w-52"
+                              required
+                            />
+                            <Input name="note" placeholder="Approval note" className="h-8 w-32" />
+                            <Button type="submit" size="sm">
+                              Approve
+                            </Button>
+                          </form>
+                        ) : null}
+                        {upcoming && session.meet_link ? (
+                          <Button asChild size="sm">
+                            <a href={session.meet_link} target="_blank" rel="noopener noreferrer">
+                              Join Meet
+                            </a>
+                          </Button>
+                        ) : null}
+                        {needsConfirmRow ? (
+                          <form action={markSessionHappenedAction}>
+                            <input type="hidden" name="id" value={session.id} />
+                            <Button type="submit" size="sm">
+                              Mark as happened
+                            </Button>
+                          </form>
+                        ) : null}
+                        {!needsConfirmRow ? (
+                          <form action={teacherCancelSessionAction} className="flex items-center gap-2">
+                            <input type="hidden" name="id" value={session.id} />
+                            <Input name="note" placeholder="Cancel reason" className="h-8 w-32" />
+                            <Button type="submit" size="sm" variant="outline">
+                              Cancel
+                            </Button>
+                          </form>
+                        ) : null}
+                        {pending ? (
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={'/teach/schedule' as '/'}>Propose other time</Link>
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                    {session.student_note ? (
-                      <p className="mt-1 text-sm text-muted-foreground">Student note: {session.student_note}</p>
-                    ) : null}
-                    {session.session_notes ? (
-                      <p className="mt-1 text-sm text-muted-foreground">Latest note: {session.session_notes}</p>
-                    ) : null}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <form action={teacherApproveSessionAction} className="flex items-center gap-2">
-                        <input type="hidden" name="id" value={session.id} />
-                        <Input name="note" placeholder="Approval note" className="h-8 w-32" />
-                        <Button type="submit" size="sm">
-                          Approve
-                        </Button>
-                      </form>
-                      <form action={teacherCancelSessionAction} className="flex items-center gap-2">
-                        <input type="hidden" name="id" value={session.id} />
-                        <Input name="note" placeholder="Cancel reason" className="h-8 w-32" />
-                        <Button type="submit" size="sm" variant="outline">
-                          Cancel
-                        </Button>
-                      </form>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={'/teach/schedule' as '/'}>Propose other time</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
         </section>
 
-        {/* Side column */}
         <div className="space-y-6 lg:col-span-2">
           <section className="rounded-xl border border-cream-300 bg-cream-50 p-6 shadow-card">
             <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
@@ -280,7 +375,6 @@ export default async function TeacherTodayPage() {
         </div>
       </div>
 
-      {/* Prep shortcuts */}
       <section className="mt-8">
         <p className="mb-3 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
           {t('shortcuts.eyebrow')}
