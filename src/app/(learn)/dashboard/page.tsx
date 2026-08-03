@@ -18,36 +18,61 @@ import { getCurrentProfile } from '@/lib/auth/session'
 import { listActionableHomeworkForStudent } from '@/lib/data/homework'
 import { listUnconfirmedPastSessionsForUser } from '@/lib/data/sessions'
 import { getCurrentStudentProgress } from '@/lib/data/progress'
+import { getUnitsForLevel } from '@/lib/data/curriculum'
 import { LEVELS } from '@/lib/constants/brand'
-import { HA_UNITS, UNIT_PARTS } from '@/lib/constants/curriculum'
+import {
+  DASHBOARD_PARTS,
+  ethiopicUnitNumber,
+  isUnitUnlocked,
+  pickActiveUnit,
+  unitHref,
+} from '@/lib/domain/dashboard-units'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
+const LEVEL_ID = 'ha'
+
 export default async function StudentDashboardPage() {
   const profile = await getCurrentProfile()
-  const [progress, actionableHomework, unconfirmedSessions] = await Promise.all([
+  const [progress, actionableHomework, unconfirmedSessions, levelUnits] = await Promise.all([
     getCurrentStudentProgress(),
     listActionableHomeworkForStudent(),
     profile
       ? listUnconfirmedPastSessionsForUser({ userId: profile.id, role: 'student' })
       : Promise.resolve([]),
+    getUnitsForLevel(LEVEL_ID),
   ])
   const t = await getTranslations('dashboard')
   const firstName = profile?.full_name?.split(/\s+/)[0]
   const hour = new Date().getHours()
   const greetingKey = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
-  const level = LEVELS[0]!
-  const activeUnit = HA_UNITS[0]!
-  const haUnits = progress?.units.filter((u) => u.level?.id === 'ha') ?? []
-  const unitsComplete = haUnits.filter((u) => u.grade.isComplete).length
-  const unitsTotal = haUnits.length || 10
+  const level = LEVELS.find((l) => l.id === LEVEL_ID) ?? LEVELS[0]!
+
+  const progressByUnitId = new Map(
+    (progress?.units.filter((u) => u.level?.id === LEVEL_ID) ?? []).map((u) => [u.unit.id, u]),
+  )
+  const publishedUnits = levelUnits.filter(isUnitUnlocked)
+  const activeUnit = pickActiveUnit(levelUnits, progressByUnitId)
+  const activeIndex = activeUnit ? levelUnits.findIndex((u) => u.id === activeUnit.id) : -1
+  const activeProgress = activeUnit ? progressByUnitId.get(activeUnit.id) : undefined
+  const activeNumber = activeIndex >= 0 ? activeIndex + 1 : 1
+  const activeHref = activeUnit
+    ? unitHref(LEVEL_ID, activeUnit.slug)
+    : (`/levels/${LEVEL_ID}` as const)
+
+  const unitsComplete = publishedUnits.filter((u) => progressByUnitId.get(u.id)?.grade.isComplete)
+    .length
+  const unitsTotal = publishedUnits.length || levelUnits.length || 1
   const overallPct =
     progress?.averageGrade != null
       ? Math.round(progress.averageGrade)
       : unitsTotal > 0
         ? Math.round((unitsComplete / unitsTotal) * 100)
         : 0
-  const practicePassed = haUnits.filter((u) => u.grade.practicePassed).length
+  const practicePassed = publishedUnits.filter(
+    (u) => progressByUnitId.get(u.id)?.grade.practicePassed,
+  ).length
+
   const homeworkHref =
     actionableHomework.length === 1
       ? (`/homework/${actionableHomework[0]!.id}` as '/')
@@ -173,8 +198,10 @@ export default async function StudentDashboardPage() {
             </div>
             <div className="pt-2">
               <Button asChild className="bg-gold-500 text-green-950 hover:bg-gold-400">
-                <Link href={'/levels/ha' as '/'}>
-                  {t('hero.cta')}
+                <Link href={activeHref as '/'}>
+                  {activeUnit
+                    ? t('hero.cta', { n: activeNumber, title: activeUnit.title })
+                    : t('hero.ctaBrowse')}
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
@@ -203,82 +230,138 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      <section>
-        <h3 className="mb-4 font-display text-xl text-green-900">{t('parts.title')}</h3>
-        <div className="grid gap-4 md:grid-cols-3 md:gap-6">
-          {UNIT_PARTS.map((part) => (
-            <Link
-              key={part.id}
-              href={part.href as '/'}
-              className="group relative overflow-hidden rounded-xl border border-cream-300 bg-cream-50 p-6 shadow-card transition-all hover:shadow-card-hover"
-            >
-              <span className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
-                {part.part}
-              </span>
-              <h4 className="mt-1 font-display text-2xl text-green-900">{part.title}</h4>
-              <p className="mt-2 text-xs leading-relaxed text-green-600">{part.body}</p>
-              <div className="mt-4 flex items-center justify-between text-xs font-semibold text-gold-700 transition-transform group-hover:translate-x-0.5">
-                <span>{part.cta}</span>
-                <ChevronRight className="size-4" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {activeUnit ? (
+        <section>
+          <h3 className="mb-4 font-display text-xl text-green-900">
+            {t('parts.title', { n: activeNumber })}
+          </h3>
+          <div className="grid gap-4 md:grid-cols-3 md:gap-6">
+            {DASHBOARD_PARTS.map((part) => (
+              <Link
+                key={part.id}
+                href={unitHref(LEVEL_ID, activeUnit.slug, part.route) as '/'}
+                className="group relative overflow-hidden rounded-xl border border-cream-300 bg-cream-50 p-6 shadow-card transition-all hover:shadow-card-hover"
+              >
+                <span className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+                  {part.part}
+                </span>
+                <h4 className="mt-1 font-display text-2xl text-green-900">{part.title}</h4>
+                <p className="mt-2 text-xs leading-relaxed text-green-600">{part.body}</p>
+                <div className="mt-4 flex items-center justify-between text-xs font-semibold text-gold-700 transition-transform group-hover:translate-x-0.5">
+                  <span>{part.cta}</span>
+                  <ChevronRight className="size-4" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <h3 className="font-display text-xl text-green-900">{t('units.title')}</h3>
 
-        <div className="flex flex-col gap-4 rounded-xl border-2 border-gold-400 bg-gold-50/50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <AmharicText size="lg" className="text-gold-600">
-              {activeUnit.number}
-            </AmharicText>
-            <div>
-              <span className="text-[10px] font-bold tracking-[0.14em] text-gold-700 uppercase">
-                {t('units.active')}
-              </span>
-              <h4 className="text-base font-bold text-green-900">
-                {activeUnit.title}
-                {activeUnit.amharic ? (
-                  <>
-                    {' '}
-                    (
-                    <AmharicText size="sm" className="inline text-base text-gold-700">
-                      {activeUnit.amharic}
-                    </AmharicText>
-                    )
-                  </>
-                ) : null}
-              </h4>
-              <p className="text-xs text-green-600">{activeUnit.description}</p>
-            </div>
+        {levelUnits.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-cream-400 bg-cream-50 p-6 text-center">
+            <p className="text-sm text-green-700">{t('units.empty')}</p>
           </div>
-          <Button asChild className="shrink-0 bg-green-700 text-cream-50 hover:bg-green-600">
-            <Link href={'/levels/ha' as '/'}>{t('units.openUnit')}</Link>
-          </Button>
-        </div>
+        ) : (
+          levelUnits.map((unit, index) => {
+            const unlocked = isUnitUnlocked(unit)
+            const unitProgress = progressByUnitId.get(unit.id)
+            const isActive = activeUnit?.id === unit.id
+            const number = ethiopicUnitNumber(index)
+            const displayN = index + 1
+            const statusState = !unlocked
+              ? ('locked' as const)
+              : unitProgress?.grade.isComplete
+                ? ('completed' as const)
+                : unitProgress && unitProgress.selfPacedStatus !== 'not_started'
+                  ? ('in_progress' as const)
+                  : ('not_started' as const)
 
-        {HA_UNITS.filter((u) => u.locked).map((unit) => (
-          <div
-            key={unit.id}
-            className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 p-4 opacity-75"
-          >
-            <div className="flex items-center gap-4">
-              <AmharicText size="lg" className="text-green-400">
-                {unit.number}
-              </AmharicText>
-              <div>
-                <span className="text-[10px] font-bold tracking-[0.14em] text-green-500 uppercase">
-                  {t('units.locked')}
-                </span>
-                <h4 className="text-base font-bold text-green-900">{unit.title}</h4>
-                <p className="text-xs text-green-600">{unit.description}</p>
-              </div>
-            </div>
-            <StatusChip state="locked" />
-          </div>
-        ))}
+            if (isActive && unlocked) {
+              return (
+                <div
+                  key={unit.id}
+                  className="flex flex-col gap-4 rounded-xl border-2 border-gold-400 bg-gold-50/50 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex items-center gap-4">
+                    <AmharicText size="lg" className="text-gold-600">
+                      {number}
+                    </AmharicText>
+                    <div>
+                      <span className="text-[10px] font-bold tracking-[0.14em] text-gold-700 uppercase">
+                        {activeProgress && activeProgress.selfPacedStatus !== 'not_started'
+                          ? t('units.opened', { n: displayN })
+                          : t('units.active', { n: displayN })}
+                      </span>
+                      <h4 className="text-base font-bold text-green-900">{unit.title}</h4>
+                      {unit.description ? (
+                        <p className="text-xs text-green-600">{unit.description}</p>
+                      ) : unit.subtitle ? (
+                        <p className="text-xs text-green-600">{unit.subtitle}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Button asChild className="shrink-0 bg-green-700 text-cream-50 hover:bg-green-600">
+                    <Link href={unitHref(LEVEL_ID, unit.slug) as '/'}>
+                      {t('units.openUnit', { n: displayN })}
+                    </Link>
+                  </Button>
+                </div>
+              )
+            }
+
+            if (!unlocked) {
+              return (
+                <div
+                  key={unit.id}
+                  className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 p-4 opacity-75"
+                >
+                  <div className="flex items-center gap-4">
+                    <AmharicText size="lg" className="text-green-400">
+                      {number}
+                    </AmharicText>
+                    <div>
+                      <span className="text-[10px] font-bold tracking-[0.14em] text-green-500 uppercase">
+                        {t('units.locked')}
+                      </span>
+                      <h4 className="text-base font-bold text-green-900">{unit.title}</h4>
+                      {unit.description ? (
+                        <p className="text-xs text-green-600">{unit.description}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <StatusChip state="locked" />
+                </div>
+              )
+            }
+
+            return (
+              <Link
+                key={unit.id}
+                href={unitHref(LEVEL_ID, unit.slug) as '/'}
+                className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 p-4 transition hover:border-gold-400"
+              >
+                <div className="flex items-center gap-4">
+                  <AmharicText size="lg" className="text-gold-600">
+                    {number}
+                  </AmharicText>
+                  <div>
+                    <span className="text-[10px] font-bold tracking-[0.14em] text-gold-700 uppercase">
+                      {t('units.unlocked', { n: displayN })}
+                    </span>
+                    <h4 className="text-base font-bold text-green-900">{unit.title}</h4>
+                    {unit.description ? (
+                      <p className="text-xs text-green-600">{unit.description}</p>
+                    ) : null}
+                  </div>
+                </div>
+                <StatusChip state={statusState} />
+              </Link>
+            )
+          })
+        )}
       </section>
 
       <section>

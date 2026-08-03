@@ -360,20 +360,24 @@
       "body": "Master essential greetings, self-introductions, numbers, ordering food, and cultural etiquette in Ethiopia.",
       "unitsComplete": "{done} of {total} units complete",
       "minutes": "~45 min / lesson",
-      "cta": "Continue Unit 1",
+      "cta": "Continue Unit {n}: {title}",
+      "ctaBrowse": "Browse Foundations",
       "progressLabel": "Overall progress",
       "percent": "{value}% completed",
       "practicePassed": "Practice passed {done}/{total}",
       "seeDetail": "See grade detail"
     },
     "parts": {
-      "title": "Unit 1 structure"
+      "title": "Unit {n} structure"
     },
     "units": {
       "title": "Level 1 unit track",
-      "active": "Unit 01 · Active",
-      "locked": "Locked",
-      "openUnit": "Open Unit 1"
+      "active": "Unit {n} · Active",
+      "opened": "Unit {n} · Opened",
+      "unlocked": "Unit {n} · Available",
+      "locked": "Locked · Not published",
+      "openUnit": "Open Unit {n}",
+      "empty": "No units in Foundations yet. Your teacher will publish them soon."
     },
     "continue": {
       "eyebrow": "Continue",

@@ -78,15 +78,17 @@ export default async function LevelDetailPage({ params }: Props) {
               </TableHeader>
               <TableBody>
                 {(units ?? []).map(
-                  (u: {
-                    id: string
-                    title: string
-                    sort_order: number
-                    status: string
-                    estimated_minutes: number
-                  }) => (
+                  (
+                    u: {
+                      id: string
+                      title: string
+                      status: string
+                      estimated_minutes: number
+                    },
+                    index: number,
+                  ) => (
                     <TableRow key={u.id}>
-                      <TableCell>{u.sort_order}</TableCell>
+                      <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Link
                           href={`/admin/units/${u.id}` as '/'}

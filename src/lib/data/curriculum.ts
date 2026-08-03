@@ -133,6 +133,21 @@ export const getPublishedUnitsForLevel = cache(async (levelSlug: string) => {
   })
 })
 
+/** All units for a level (including drafts) — for dashboard lock/unlock display. */
+export const getUnitsForLevel = cache(async (levelSlug: string) => {
+  return curriculumCache(['curriculum', 'all-units-for-level', levelSlug], async () => {
+    const supabase = curriculumDb()
+    const { data, error } = await supabase
+      .from('units')
+      .select(UNIT_COLUMNS)
+      .eq('level_id', levelSlug)
+      .order('sort_order')
+
+    if (error) throw new Error(error.message)
+    return (data ?? []) as PublishedUnit[]
+  })
+})
+
 export const getPublishedPartContent = cache(
   async (unitId: string, part: LessonPartKey): Promise<LessonPartContent | null> => {
     return curriculumCache(['curriculum', 'part', unitId, part], async () => {
