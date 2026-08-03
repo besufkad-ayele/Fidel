@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Serif_Display, Inter, Noto_Sans_Ethiopic } from 'next/font/google'
+import localFont from 'next/font/local'
 import { NextIntlClientProvider } from 'next-intl'
 import { getLocale } from 'next-intl/server'
 import { Providers } from '@/components/providers'
@@ -19,6 +20,15 @@ const dmSerif = DM_Serif_Display({
   display: 'swap',
 })
 
+/** Primary Amharic face — used only via `--font-ethiopic` / `<AmharicText>`. */
+const zemenay = localFont({
+  src: '../fonts/Zemenay-Regular.ttf',
+  variable: '--font-zemenay',
+  display: 'swap',
+  weight: '400',
+})
+
+/** Fallback for Ethiopic glyphs missing from Zemenay. */
 const notoEthiopic = Noto_Sans_Ethiopic({
   subsets: ['ethiopic'],
   variable: '--font-noto-ethiopic',
@@ -49,7 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       suppressHydrationWarning
-      className={`${inter.variable} ${dmSerif.variable} ${notoEthiopic.variable}`}
+      className={`${inter.variable} ${dmSerif.variable} ${zemenay.variable} ${notoEthiopic.variable}`}
     >
       <body>
         <NextIntlClientProvider>

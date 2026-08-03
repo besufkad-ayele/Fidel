@@ -20,7 +20,7 @@ type AmharicTextProps = {
 
 /**
  * Every Amharic glyph in the product goes through this component.
- * Applies Noto Sans Ethiopic, lang="am", and the compensated Amharic type scale.
+ * Applies Zemenay (Ethiopic), lang="am", and the compensated Amharic type scale.
  */
 export function AmharicText({
   children,

@@ -48,7 +48,7 @@ export function FidelLetterFall({
   const letterGap = isHero ? 118 : 64
   const startX = (viewW - (WORD.length - 1) * letterGap) / 2
   const ethiopicFont =
-    'var(--font-noto-ethiopic), "Noto Sans Ethiopic", Nyala, sans-serif'
+    'var(--font-zemenay), var(--font-noto-ethiopic), "Noto Sans Ethiopic", Nyala, sans-serif'
 
   return (
     <div

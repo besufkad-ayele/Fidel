@@ -8,7 +8,7 @@
   /* Fonts */
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-display: var(--font-dm-serif), Georgia, serif;
-  --font-ethiopic: var(--font-noto-ethiopic), "Nyala", sans-serif;
+  --font-ethiopic: var(--font-zemenay), var(--font-noto-ethiopic), "Nyala", sans-serif;
 
   /* Brand ramps */
   --color-green-50: #f2f6f5;

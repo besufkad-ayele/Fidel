@@ -36,6 +36,9 @@ export default async function AdminHomeworkPage() {
       <PageHeader
         title="Homework"
         description="Create homework with assignment link/file materials. Students can answer with audio/video uploads, a Drive link, or an image up to 1MB."
+        actions={[
+          { label: 'Assess submissions', href: '/admin/homework/assess' },
+        ]}
       />
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">

@@ -75,6 +75,21 @@ const config: Record<
     className: 'border-danger-500/25 bg-danger-50 text-danger-500',
     icon: Ban,
   },
+  submitted: {
+    className: 'border-warning-500/25 bg-warning-50 text-warning-500',
+    icon: Clock3,
+    label: 'Awaiting assessment',
+  },
+  reviewed: {
+    className: 'border-success-500/25 bg-success-50 text-success-500',
+    icon: CircleCheck,
+    label: 'Reviewed',
+  },
+  needs_resubmission: {
+    className: 'border-warning-500/25 bg-warning-50 text-warning-500',
+    icon: CircleDashed,
+    label: 'Needs resubmission',
+  },
   archived: {
     className: 'border-cream-400 bg-cream-100 text-muted-foreground',
     icon: Archive,
