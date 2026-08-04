@@ -942,6 +942,336 @@ function DialogueLinesEditor({
   )
 }
 
+type DialogueTableLine = Extract<ContentBlock, { type: 'dialogue_table' }>['lines'][number]
+
+function resizeDialogueTableCells(
+  cells: string[][],
+  rowCount: number,
+  colCount: number,
+): string[][] {
+  return Array.from({ length: rowCount }, (_, ri) =>
+    Array.from({ length: colCount }, (_, ci) => cells[ri]?.[ci] ?? ''),
+  )
+}
+
+function DialogueTableBlockFields({
+  block,
+  onChange,
+}: {
+  block: Extract<ContentBlock, { type: 'dialogue_table' }>
+  onChange: (next: ContentBlock) => void
+}) {
+  const lines = block.lines
+  const colCount = Math.max(block.columnHeaders.length, 1)
+  const rowCount = Math.max(block.rowLabels.length, 1)
+  const cells = resizeDialogueTableCells(block.cells ?? [], rowCount, colCount)
+
+  function setLines(next: DialogueTableLine[]) {
+    onChange({ ...block, lines: next })
+  }
+
+  function updateLine(index: number, patch: Partial<DialogueTableLine>) {
+    const next = [...lines]
+    next[index] = { ...next[index], ...patch }
+    setLines(next)
+  }
+
+  function setColumns(columnHeaders: string[]) {
+    const cols = Math.max(columnHeaders.length, 1)
+    onChange({
+      ...block,
+      columnHeaders,
+      cells: resizeDialogueTableCells(block.cells ?? [], rowCount, cols),
+    })
+  }
+
+  function setRows(rowLabels: string[]) {
+    const rows = Math.max(rowLabels.length, 1)
+    onChange({
+      ...block,
+      rowLabels,
+      cells: resizeDialogueTableCells(block.cells ?? [], rows, colCount),
+    })
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <Label>Title</Label>
+        <Input
+          className="mt-1.5"
+          value={block.title ?? ''}
+          onChange={(e) => onChange({ ...block, title: e.target.value })}
+        />
+      </div>
+      <div>
+        <Label>Instructions</Label>
+        <Textarea
+          className="mt-1.5"
+          rows={2}
+          value={block.prompt ?? ''}
+          onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+          placeholder="Read the texts. Optionally listen. Fill the table…"
+        />
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+        <Label>Full dialogue audio (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          Students can listen to the whole track before or while reading.
+        </p>
+        <AdminAudioField
+          name={`dialogue-table-audio-${block.id}`}
+          label="Audio file"
+          folder="dialogue"
+          levelId="ha"
+          clipLabel="dialogue-table"
+          value={block.audioUrl ?? ''}
+          onChange={(next) => onChange({ ...block, audioUrl: next })}
+        />
+        <Input
+          placeholder="Audio button label"
+          value={block.audioLabel ?? ''}
+          onChange={(e) => onChange({ ...block, audioLabel: e.target.value })}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={block.showText !== false}
+            onChange={(e) => onChange({ ...block, showText: e.target.checked })}
+          />
+          Show written texts by default (uncheck for listen-first exam mode)
+        </label>
+      </div>
+
+      <div className="space-y-3">
+        <Label>Introduction / dialogue lines</Label>
+        {lines.map((line, i) => (
+          <div key={line.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+            <ListReorderControls
+              index={i}
+              total={lines.length}
+              label={`Person / line ${i + 1}`}
+              onMove={(from, to) => {
+                if (to < 0 || to >= lines.length) return
+                setLines(arrayMove(lines, from, to))
+              }}
+              onRemove={
+                lines.length > 1
+                  ? () => setLines(lines.filter((_, idx) => idx !== i))
+                  : undefined
+              }
+            />
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <Label className="text-xs">Alignment</Label>
+                <select
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={line.alignment ?? (i % 2 === 0 ? 'left' : 'right')}
+                  onChange={(e) =>
+                    updateLine(i, { alignment: e.target.value as 'left' | 'right' })
+                  }
+                >
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <Input
+                placeholder="Speaker (A, Sara…)"
+                value={line.speaker}
+                onChange={(e) => updateLine(i, { speaker: e.target.value })}
+              />
+              <Input
+                placeholder="Column key (optional, e.g. A)"
+                value={line.columnKey ?? ''}
+                onChange={(e) => updateLine(i, { columnKey: e.target.value })}
+              />
+            </div>
+            <AdminImageField
+              label="Person image"
+              folder="avatar"
+              levelId="ha"
+              clipLabel={`dt-speaker-${line.speaker || i}`}
+              value={line.imageUrl ?? ''}
+              onChange={(next) => updateLine(i, { imageUrl: next })}
+              avatar
+            />
+            <Input
+              placeholder="Amharic text"
+              className="font-ethiopic"
+              value={line.amharic}
+              onChange={(e) => updateLine(i, { amharic: e.target.value })}
+            />
+            <Input
+              placeholder="Transliteration"
+              value={line.transliteration ?? ''}
+              onChange={(e) => updateLine(i, { transliteration: e.target.value })}
+            />
+            <Input
+              placeholder="English"
+              value={line.english ?? ''}
+              onChange={(e) => updateLine(i, { english: e.target.value })}
+            />
+            <AdminAudioField
+              name={`dialogue-table-line-${block.id}-${line.id}`}
+              label="Line audio (optional)"
+              folder="dialogue"
+              levelId="ha"
+              clipLabel={`dt-line-${line.speaker || i}`}
+              value={line.audioUrl ?? ''}
+              onChange={(next) => updateLine(i, { audioUrl: next })}
+            />
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setLines([
+              ...lines,
+              {
+                id: crypto.randomUUID(),
+                speaker: String.fromCharCode(65 + lines.length),
+                alignment: lines.length % 2 === 0 ? 'left' : 'right',
+                columnKey: String.fromCharCode(65 + lines.length),
+                imageUrl: '',
+                amharic: '',
+                transliteration: '',
+                english: '',
+                audioUrl: '',
+              },
+            ])
+          }
+        >
+          Add person / line
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <Label>Table columns (people)</Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setColumns([...block.columnHeaders, `Col ${colCount + 1}`])}
+          >
+            <Plus className="mr-1 size-3.5" />
+            Column
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {block.columnHeaders.map((h, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <Input
+                className="w-28"
+                value={h}
+                onChange={(e) => {
+                  const next = [...block.columnHeaders]
+                  next[i] = e.target.value
+                  setColumns(next)
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={block.columnHeaders.length <= 1}
+                aria-label="Remove column"
+                onClick={() => setColumns(block.columnHeaders.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 className="size-3.5 text-danger-500" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <Label>Table rows (info fields)</Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setRows([...block.rowLabels, `Row ${rowCount + 1}`])}
+          >
+            <Plus className="mr-1 size-3.5" />
+            Row
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {block.rowLabels.map((label, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <Input
+                className="w-36"
+                value={label}
+                onChange={(e) => {
+                  const next = [...block.rowLabels]
+                  next[i] = e.target.value
+                  setRows(next)
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={block.rowLabels.length <= 1}
+                aria-label="Remove row"
+                onClick={() => setRows(block.rowLabels.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 className="size-3.5 text-danger-500" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <Label>Prefill cells (optional)</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Leave empty for students to fill. Non-empty values are shown locked as hints.
+          </p>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-cream-200">
+            <table className="w-full min-w-[320px] text-sm">
+              <thead className="bg-cream-100">
+                <tr>
+                  <th className="px-2 py-1.5" />
+                  {block.columnHeaders.map((h, i) => (
+                    <th key={i} className="px-2 py-1.5 font-medium">
+                      {h || `Col ${i + 1}`}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {block.rowLabels.map((label, ri) => (
+                  <tr key={ri} className="border-t border-cream-200">
+                    <th className="whitespace-nowrap px-2 py-1.5 text-left font-medium">
+                      {label || `Row ${ri + 1}`}
+                    </th>
+                    {block.columnHeaders.map((_, ci) => (
+                      <td key={ci} className="px-1 py-1">
+                        <Input
+                          className="h-8 min-w-[72px]"
+                          value={cells[ri]?.[ci] ?? ''}
+                          onChange={(e) => {
+                            const next = resizeDialogueTableCells(cells, rowCount, colCount)
+                            next[ri][ci] = e.target.value
+                            onChange({ ...block, cells: next })
+                          }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function updateBlock(
   blocks: ContentBlock[],
   id: string,
@@ -1003,6 +1333,7 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
   const teacher = createBlock('teacher_note')
   const objectives = createBlock('objectives')
   const dialogue = createBlock('dialogue')
+  const dialogueTable = createBlock('dialogue_table')
   const vocab = createBlock('vocabulary_set')
   const example = createBlock('callout')
   const table = createBlock('table', { tableVariant: 'static' })
@@ -1021,6 +1352,7 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
     teacher.type !== 'teacher_note' ||
     objectives.type !== 'objectives' ||
     dialogue.type !== 'dialogue' ||
+    dialogueTable.type !== 'dialogue_table' ||
     vocab.type !== 'vocabulary_set' ||
     example.type !== 'callout' ||
     table.type !== 'table' ||
@@ -1062,6 +1394,7 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
       body: 'Show a sample phrase or pattern here.',
     },
     dialogue,
+    ...(kind === 'practice' ? [dialogueTable] : []),
     { ...vocab, title: 'Core vocabulary' },
     {
       ...table,
@@ -1805,6 +2138,135 @@ function BlockFields({
           </div>
         </div>
       )
+    case 'id_card':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Card title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="Identity card"
+            />
+          </div>
+          <div>
+            <Label>Subtitle (optional)</Label>
+            <Input
+              className="mt-1.5"
+              value={block.subtitle ?? ''}
+              onChange={(e) => onChange({ ...block, subtitle: e.target.value })}
+              placeholder="Fill in your details"
+            />
+          </div>
+          <div>
+            <Label>Prompt (optional)</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Write your answers in the blank spaces."
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.showPhotoSlot ?? true}
+              onChange={(e) => onChange({ ...block, showPhotoSlot: e.target.checked })}
+            />
+            Show photo slot on the card
+          </label>
+          {block.showPhotoSlot ? (
+            <AdminImageField
+              label="ID card photo"
+              folder="lesson"
+              levelId="ha"
+              clipLabel="id-card-photo"
+              value={block.photoUrl ?? ''}
+              onChange={(next) => onChange({ ...block, photoUrl: next })}
+            />
+          ) : null}
+          <div className="space-y-2">
+            <Label>Fields (label + blank for student)</Label>
+            {block.fields.map((field, i) => (
+              <div key={field.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.fields.length}
+                  label={`Field ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.fields.length) return
+                    onChange({ ...block, fields: arrayMove(block.fields, from, to) })
+                  }}
+                  onRemove={
+                    block.fields.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            fields: block.fields.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <Input
+                  placeholder="Label (e.g. Name / ስም)"
+                  value={field.label}
+                  onChange={(e) => {
+                    const fields = [...block.fields]
+                    fields[i] = { ...field, label: e.target.value }
+                    onChange({ ...block, fields })
+                  }}
+                />
+                <Input
+                  placeholder="Hint inside blank (optional)"
+                  value={field.hint ?? ''}
+                  onChange={(e) => {
+                    const fields = [...block.fields]
+                    fields[i] = { ...field, hint: e.target.value }
+                    onChange({ ...block, fields })
+                  }}
+                />
+                <div>
+                  <Label className="text-xs">Blank lines</Label>
+                  <Input
+                    type="number"
+                    className="mt-1.5 max-w-[6rem]"
+                    min={1}
+                    max={4}
+                    value={field.lines ?? 1}
+                    onChange={(e) => {
+                      const fields = [...block.fields]
+                      fields[i] = {
+                        ...field,
+                        lines: Math.min(4, Math.max(1, Number(e.target.value) || 1)),
+                      }
+                      onChange({ ...block, fields })
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  fields: [
+                    ...block.fields,
+                    { id: crypto.randomUUID(), label: '', hint: '', lines: 1 },
+                  ],
+                })
+              }
+            >
+              Add field
+            </Button>
+          </div>
+        </div>
+      )
+    case 'dialogue_table':
+      return <DialogueTableBlockFields block={block} onChange={onChange} />
     case 'references':
       return (
         <div className="space-y-3">

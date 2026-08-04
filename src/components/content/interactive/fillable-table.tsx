@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AmharicText } from '@/components/shared/amharic-text'
@@ -20,7 +20,44 @@ function looksAmharic(text: string) {
 
 function CellText({ value }: { value: string }) {
   if (!value) return <span className="text-green-400">—</span>
-  return looksAmharic(value) ? <AmharicText size="sm">{value}</AmharicText> : <>{value}</>
+  return looksAmharic(value) ? (
+    <AmharicText size="sm" className="break-words">
+      {value}
+    </AmharicText>
+  ) : (
+    <span className="break-words whitespace-pre-wrap">{value}</span>
+  )
+}
+
+/** Grows with content so long answers stay fully visible. */
+function AutoGrowField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${Math.max(el.scrollHeight, 36)}px`
+  }, [value])
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full min-w-[7rem] resize-none overflow-hidden rounded-md border border-cream-300 bg-white px-2 py-1.5 text-sm leading-snug break-words text-green-900 outline-none focus:border-gold-500"
+    />
+  )
 }
 
 /**
@@ -80,13 +117,13 @@ export function InteractiveFillableTable({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-cream-300">
-        <table className="w-full min-w-[320px] text-left text-sm">
+        <table className="w-full table-auto text-left text-sm">
           <thead className="bg-cream-200 text-green-800">
             <tr>
-              <th className="w-10 px-2 py-2 text-center font-semibold">#</th>
+              <th className="w-10 px-2 py-2 text-center align-bottom font-semibold">#</th>
               {block.headers.map((h, i) => (
-                <th key={i} className="px-3 py-2 font-semibold">
-                  {h || `Column ${i + 1}`}
+                <th key={i} className="min-w-[8rem] px-3 py-2 align-bottom font-semibold">
+                  <span className="break-words">{h || `Column ${i + 1}`}</span>
                 </th>
               ))}
               <th className="w-12 px-2 py-2">
@@ -97,15 +134,15 @@ export function InteractiveFillableTable({
           <tbody>
             {fixedRows.map((row, ri) => (
               <tr key={`fixed-${ri}`} className="border-t border-cream-300 bg-cream-50/80">
-                <td className="px-2 py-2 text-center text-xs font-semibold text-green-600">
+                <td className="px-2 py-2 text-center align-top text-xs font-semibold text-green-600">
                   {ri + 1}
                 </td>
                 {row.map((cell, ci) => (
-                  <td key={ci} className="px-3 py-2 text-green-900">
+                  <td key={ci} className="px-3 py-2 align-top text-green-900">
                     <CellText value={cell} />
                   </td>
                 ))}
-                <td className="px-1 py-1.5 text-center">
+                <td className="px-1 py-1.5 text-center align-top">
                   <span className="text-[10px] font-medium tracking-wide text-green-500 uppercase">
                     Fixed
                   </span>
@@ -117,21 +154,19 @@ export function InteractiveFillableTable({
               const canRemove = fixedRows.length > 0 || extraRows.length > 1
               return (
                 <tr key={`extra-${ri}`} className="border-t border-cream-300">
-                  <td className="px-2 py-2 text-center text-xs font-semibold text-green-600">
+                  <td className="px-2 py-2 text-center align-top text-xs font-semibold text-green-600">
                     {displayIndex}
                   </td>
                   {row.map((cell, ci) => (
-                    <td key={ci} className="px-2 py-1.5">
-                      <input
-                        type="text"
+                    <td key={ci} className="px-2 py-1.5 align-top">
+                      <AutoGrowField
                         value={cell}
-                        onChange={(e) => updateExtraCell(ri, ci, e.target.value)}
+                        onChange={(value) => updateExtraCell(ri, ci, value)}
                         placeholder={block.headers[ci] || `Column ${ci + 1}`}
-                        className="w-full min-w-[100px] rounded-md border border-cream-300 bg-white px-2 py-1.5 text-sm text-green-900 outline-none focus:border-gold-500"
                       />
                     </td>
                   ))}
-                  <td className="px-1 py-1.5 text-center">
+                  <td className="px-1 py-1.5 text-center align-top">
                     <button
                       type="button"
                       onClick={() => removeExtraRow(ri)}
@@ -177,13 +212,13 @@ export function StaticContentTable({
     <div className="space-y-2">
       {title ? <p className="font-display text-lg text-green-900">{title}</p> : null}
       <div className="overflow-x-auto rounded-xl border border-cream-300">
-        <table className="w-full min-w-[320px] text-left text-sm">
+        <table className="w-full table-auto text-left text-sm">
           <thead className="bg-cream-200 text-green-800">
             <tr>
-              <th className="w-10 px-2 py-2 text-center font-semibold">#</th>
+              <th className="w-10 px-2 py-2 text-center align-bottom font-semibold">#</th>
               {headers.map((h, i) => (
-                <th key={i} className="px-3 py-2 font-semibold">
-                  {h || `Column ${i + 1}`}
+                <th key={i} className="min-w-[8rem] px-3 py-2 align-bottom font-semibold">
+                  <span className="break-words">{h || `Column ${i + 1}`}</span>
                 </th>
               ))}
             </tr>
@@ -194,11 +229,11 @@ export function StaticContentTable({
                 key={ri}
                 className={cn('border-t border-cream-300', ri % 2 === 1 && 'bg-cream-50/60')}
               >
-                <td className="px-2 py-2 text-center text-xs font-semibold text-green-600">
+                <td className="px-2 py-2 text-center align-top text-xs font-semibold text-green-600">
                   {ri + 1}
                 </td>
                 {row.map((cell, ci) => (
-                  <td key={ci} className="px-3 py-2 text-green-900">
+                  <td key={ci} className="px-3 py-2 align-top text-green-900">
                     <CellText value={cell} />
                   </td>
                 ))}

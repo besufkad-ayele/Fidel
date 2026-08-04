@@ -8,16 +8,23 @@ import { createClient } from '@/lib/supabase/server'
 
 export type ReviewHomeworkResult = { ok: true } | { ok: false; error: string }
 
-async function requireTeacherOrAdmin() {
+async function requireTeacherOrAdmin(): Promise<
+  | {
+      ok: true
+      user: Awaited<ReturnType<typeof requireAuth>>
+      profile: NonNullable<Awaited<ReturnType<typeof getCurrentProfile>>>
+    }
+  | { ok: false; error: string }
+> {
   const user = await requireAuth()
   const profile = await getCurrentProfile()
   if (!profile?.is_active) {
-    return { error: 'Not signed in.' as const }
+    return { ok: false, error: 'Not signed in.' }
   }
   if (profile.role !== 'teacher' && profile.role !== 'admin') {
-    return { error: 'Only teachers and admins can assess homework.' as const }
+    return { ok: false, error: 'Only teachers and admins can assess homework.' }
   }
-  return { user, profile }
+  return { ok: true, user, profile }
 }
 
 async function teacherCanReviewStudent(teacherId: string, studentId: string) {
@@ -35,7 +42,7 @@ export async function reviewHomeworkSubmissionAction(
   formData: FormData,
 ): Promise<ReviewHomeworkResult> {
   const auth = await requireTeacherOrAdmin()
-  if ('error' in auth) return { ok: false, error: auth.error }
+  if (!auth.ok) return { ok: false, error: auth.error }
 
   const { user, profile } = auth
   const submissionId = String(formData.get('submissionId') ?? '').trim()

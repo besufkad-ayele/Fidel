@@ -40,8 +40,7 @@ export default async function TeachHomeworkPage({ searchParams }: Props) {
     { key: 'all', label: 'All', href: '/teach/homework?status=all' },
   ] as const
 
-  const activeKey =
-    status === 'awaiting' ? 'awaiting' : status === 'submitted' ? 'awaiting' : status
+  const activeKey = status
 
   return (
     <div className="space-y-6">

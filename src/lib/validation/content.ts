@@ -25,6 +25,8 @@ export const contentBlockTypeSchema = z.enum([
   'fill_blank',
   'meaning_fill',
   'sentence_build',
+  'id_card',
+  'dialogue_table',
   'references',
   'objectives',
   'dialogue',
@@ -186,6 +188,76 @@ export const sentenceBuildBlockSchema = blockBase.extend({
       }),
     )
     .min(1),
+})
+
+/**
+ * ID-card worksheet: teacher defines labeled fields (Name, Age…);
+ * students fill the blank answer spaces.
+ */
+export const idCardBlockSchema = blockBase.extend({
+  type: z.literal('id_card'),
+  title: z.string().default('Identity card'),
+  subtitle: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Show a photo / stamp slot on the card */
+  showPhotoSlot: z.boolean().default(true),
+  /** Admin-uploaded photo shown in the slot (storage path or URL) */
+  photoUrl: optionalUrl,
+  fields: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** Field label shown on the card, e.g. "Name" / "ስም" */
+        label: z.string(),
+        /** Optional placeholder hint inside the blank */
+        hint: z.string().optional(),
+        /** Blank height: 1 = single line, 2–3 for longer answers */
+        lines: z.number().int().min(1).max(4).default(1),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Goethe-style exam task: read (and optionally listen to) short introductions /
+ * a dialogue, then fill a worksheet table with extracted info.
+ */
+export const dialogueTableBlockSchema = blockBase.extend({
+  type: z.literal('dialogue_table'),
+  title: z.string().default('ሰላም፣ እኔ…'),
+  prompt: z.string().optional(),
+  /** Full-track audio for the whole dialogue (optional listen). */
+  audioUrl: optionalUrl,
+  audioLabel: z.string().optional(),
+  /** When false, hide written lines until after listening (exam mode). */
+  showText: z.boolean().default(true),
+  lines: z
+    .array(
+      z.object({
+        id: z.string().min(1).default(() => crypto.randomUUID()),
+        /** Speaker / profile label shown above the text, e.g. "A" or "Sara" */
+        speaker: z.string(),
+        /** Chat bubble side — same as lesson dialogue */
+        alignment: z.enum(['left', 'right']).default('left'),
+        /** Optional column key matching a table header (e.g. "A") */
+        columnKey: z.string().optional(),
+        imageUrl: optionalUrl,
+        amharic: z.string(),
+        transliteration: z.string().optional(),
+        english: z.string().optional(),
+        audioUrl: z.string().default(''),
+      }),
+    )
+    .min(1),
+  /** People / answer columns, e.g. A | B | C | እኔ */
+  columnHeaders: z.array(z.string()).min(1),
+  /** Info rows, e.g. First name | Country | City | Languages */
+  rowLabels: z.array(z.string()).min(1),
+  /**
+   * Prefill grid [row][col]. Non-empty = locked hint shown to the student;
+   * empty = student fills in.
+   */
+  cells: z.array(z.array(z.string())).default([]),
 })
 
 export const practiceCategorySchema = z.object({
@@ -370,6 +442,8 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   fillBlankBlockSchema,
   meaningFillBlockSchema,
   sentenceBuildBlockSchema,
+  idCardBlockSchema,
+  dialogueTableBlockSchema,
   referencesBlockSchema,
   objectivesBlockSchema,
   dialogueBlockSchema,
@@ -510,6 +584,68 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       title: 'Quick revision',
       vocabularyIds: [],
       cards: [],
+    },
+    {
+      id: 'dialogue-table',
+      type: 'dialogue_table',
+      title: 'ሰላም፣ እኔ…',
+      prompt:
+        'Read the texts. Optionally listen to the audio. Write the information in the table. Also add your own details.',
+      audioUrl: '',
+      audioLabel: 'Listen to the dialogue',
+      showText: true,
+      lines: [
+        {
+          id: 'dt-a',
+          speaker: 'A',
+          alignment: 'left',
+          columnKey: 'A',
+          imageUrl: '',
+          amharic:
+            'ሰላም! ስሜ ሳራ ነው። ከአሜሪካ ነኝ። አሁን አዲስ አበባ እኖራለሁ። እንግሊዘኛ እና አማርኛ እናገራለሁ።',
+          transliteration:
+            'Selam! Sime Sara new. Ke America negn. Ahun Addis Ababa enoralehu. Inglizigna ina Amarigna enageralehu.',
+          english:
+            'Hello! My name is Sara. I am from America. I live in Addis Ababa now. I speak English and Amharic.',
+          audioUrl: '',
+        },
+        {
+          id: 'dt-b',
+          speaker: 'B',
+          alignment: 'right',
+          columnKey: 'B',
+          imageUrl: '',
+          amharic:
+            'ሰላም፣ እኔ ዳዊት ነኝ። ከኢትዮጵያ፣ ከባሕር ዳር ነኝ። በአዲስ አበባ እኖራለሁ። አማርኛ እና እንግሊዘኛ እናገራለሁ። ቻይንኛ እማራለሁ።',
+          transliteration:
+            'Selam, ene Dawit negn. Ke Ethiopia, ke Bahir Dar negn. Be Addis Ababa enoralehu. Amarigna ina Inglizigna enageralehu. Chaynigna emaralehu.',
+          english:
+            'Hello, I am Dawit. I am from Ethiopia, from Bahir Dar. I live in Addis Ababa. I speak Amharic and English. I am learning Chinese.',
+          audioUrl: '',
+        },
+        {
+          id: 'dt-c',
+          speaker: 'C',
+          alignment: 'left',
+          columnKey: 'C',
+          imageUrl: '',
+          amharic:
+            'ሰላም። ስሜ ዩኪ ነው። ከጃፓን፣ ከቶኪዮ ነኝ። በበርሊን እኖራለሁ። እንግሊዘኛ እና ጃፓንኛ እናገራለሁ። አማርኛ እማራለሁ።',
+          transliteration:
+            'Selam. Sime Yuki new. Ke Japan, ke Tokyo negn. Be Berlin enoralehu. Inglizigna ina Japanigna enageralehu. Amarigna emaralehu.',
+          english:
+            'Hello. My name is Yuki. I am from Japan, from Tokyo. I live in Berlin. I speak English and Japanese. I am learning Amharic.',
+          audioUrl: '',
+        },
+      ],
+      columnHeaders: ['A', 'B', 'C', 'እኔ'],
+      rowLabels: ['First name', 'Country', 'City', 'Languages'],
+      cells: [
+        ['', '', '', ''],
+        ['', '', '', ''],
+        ['', '', '', ''],
+        ['', '', '', ''],
+      ],
     },
     {
       id: 'mcq',
@@ -741,6 +877,18 @@ export const BLOCK_CATALOG: {
     description: 'Drag words from a list into order to form a sentence, then check',
     parts: 'all',
   },
+  {
+    type: 'id_card',
+    label: 'ID card form',
+    description: 'Labeled fields (Name, Age…) with blank space for the student to fill',
+    parts: 'all',
+  },
+  {
+    type: 'dialogue_table',
+    label: 'Dialogue → table',
+    description: 'Read/listen to introductions, then fill a worksheet table (exam-style)',
+    parts: 'all',
+  },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
@@ -844,6 +992,85 @@ export function createBlock(
             words: ['እንዴት', 'ነህ'],
             distractors: ['ነሽ'],
           },
+        ],
+      }
+    case 'id_card':
+      return {
+        id,
+        type,
+        title: 'Identity card',
+        subtitle: 'Fill in your details',
+        prompt: 'Write your answers in the blank spaces.',
+        showPhotoSlot: true,
+        photoUrl: '',
+        fields: [
+          { id: crypto.randomUUID(), label: 'Name', hint: '', lines: 1 },
+          { id: crypto.randomUUID(), label: 'Father’s name', hint: '', lines: 1 },
+          { id: crypto.randomUUID(), label: 'Age', hint: '', lines: 1 },
+          { id: crypto.randomUUID(), label: 'City', hint: '', lines: 1 },
+        ],
+      }
+    case 'dialogue_table':
+      return {
+        id,
+        type,
+        title: 'ሰላም፣ እኔ…',
+        prompt:
+          'Read the texts. Optionally listen to the audio. Write the information in the table. Also add your own details.',
+        audioUrl: '',
+        audioLabel: 'Listen to the dialogue',
+        showText: true,
+        lines: [
+          {
+            id: crypto.randomUUID(),
+            speaker: 'A',
+            alignment: 'left',
+            columnKey: 'A',
+            imageUrl: '',
+            amharic:
+              'ሰላም! ስሜ ሳራ ነው። ከአሜሪካ ነኝ። አሁን አዲስ አበባ እኖራለሁ። እንግሊዘኛ እና አማርኛ እናገራለሁ።',
+            transliteration:
+              'Selam! Sime Sara new. Ke America negn. Ahun Addis Ababa enoralehu. Inglizigna ina Amarigna enageralehu.',
+            english:
+              'Hello! My name is Sara. I am from America. I live in Addis Ababa now. I speak English and Amharic.',
+            audioUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            speaker: 'B',
+            alignment: 'right',
+            columnKey: 'B',
+            imageUrl: '',
+            amharic:
+              'ሰላም፣ እኔ ዳዊት ነኝ። ከኢትዮጵያ፣ ከባሕር ዳር ነኝ። በአዲስ አበባ እኖራለሁ። አማርኛ እና እንግሊዘኛ እናገራለሁ። ቻይንኛ እማራለሁ።',
+            transliteration:
+              'Selam, ene Dawit negn. Ke Ethiopia, ke Bahir Dar negn. Be Addis Ababa enoralehu. Amarigna ina Inglizigna enageralehu. Chaynigna emaralehu.',
+            english:
+              'Hello, I am Dawit. I am from Ethiopia, from Bahir Dar. I live in Addis Ababa. I speak Amharic and English. I am learning Chinese.',
+            audioUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            speaker: 'C',
+            alignment: 'left',
+            columnKey: 'C',
+            imageUrl: '',
+            amharic:
+              'ሰላም። ስሜ ዩኪ ነው። ከጃፓን፣ ከቶኪዮ ነኝ። በበርሊን እኖራለሁ። እንግሊዘኛ እና ጃፓንኛ እናገራለሁ። አማርኛ እማራለሁ።',
+            transliteration:
+              'Selam. Sime Yuki new. Ke Japan, ke Tokyo negn. Be Berlin enoralehu. Inglizigna ina Japanigna enageralehu. Amarigna emaralehu.',
+            english:
+              'Hello. My name is Yuki. I am from Japan, from Tokyo. I live in Berlin. I speak English and Japanese. I am learning Amharic.',
+            audioUrl: '',
+          },
+        ],
+        columnHeaders: ['A', 'B', 'C', 'እኔ'],
+        rowLabels: ['First name', 'Country', 'City', 'Languages'],
+        cells: [
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
         ],
       }
     case 'references':

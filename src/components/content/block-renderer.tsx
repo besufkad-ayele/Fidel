@@ -16,6 +16,8 @@ import { ComprehensionCheck } from '@/components/content/interactive/comprehensi
 import { InteractiveFillBlank } from '@/components/content/interactive/fill-blank'
 import { InteractiveMeaningFill } from '@/components/content/interactive/meaning-fill'
 import { InteractiveSentenceBuild } from '@/components/content/interactive/sentence-build'
+import { InteractiveIdCard } from '@/components/content/interactive/id-card'
+import { InteractiveDialogueTable } from '@/components/content/interactive/dialogue-table'
 import {
   InteractiveFillableTable,
   StaticContentTable,
@@ -214,6 +216,10 @@ function renderBlock(
       return <InteractiveMeaningFill block={block} mode={mode} />
     case 'sentence_build':
       return <InteractiveSentenceBuild block={block} mode={mode} />
+    case 'id_card':
+      return <InteractiveIdCard block={block} mode={mode} />
+    case 'dialogue_table':
+      return <InteractiveDialogueTable block={block} mode={mode} />
     case 'references':
       return (
         <div className="space-y-4">
