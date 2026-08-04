@@ -717,9 +717,17 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       id: 'speaking',
       type: 'speaking_task',
       prompt: 'Record yourself greeting a colleague.',
-      instructions: 'Speak clearly. You may re-record before submitting.',
+      instructions: 'Speak clearly. You may re-record and try again.',
       maxSeconds: 60,
       minSeconds: 5,
+    },
+    {
+      id: 'video',
+      type: 'video_practice',
+      prompt: 'Record a short video of yourself greeting someone.',
+      instructions: 'Face the camera and speak clearly. You may re-record.',
+      maxSeconds: 60,
+      required: true,
     },
     {
       id: 'homework',
@@ -767,7 +775,11 @@ export function createEmptyPartContent(part: LessonPartKey): LessonPartContent {
       if (block.type === 'flashcard_revision' || block.type === 'heading' || block.type === 'rich_text') {
         return { ...block, categoryId: null }
       }
-      if (block.type === 'speaking_task' || block.type === 'homework_prompt') {
+      if (
+        block.type === 'speaking_task' ||
+        block.type === 'video_practice' ||
+        block.type === 'homework_prompt'
+      ) {
         return { ...block, categoryId: speakingId }
       }
       return { ...block, categoryId: writingId }
@@ -892,8 +904,8 @@ export const BLOCK_CATALOG: {
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
-  { type: 'speaking_task', label: 'Speaking task', description: 'Timed voice recording', parts: 'all' },
-  { type: 'video_practice', label: 'Video practice', description: 'Student video submission', parts: 'all' },
+  { type: 'speaking_task', label: 'Voice recording', description: 'Student records themselves speaking (practice or homework)', parts: 'all' },
+  { type: 'video_practice', label: 'Video recording', description: 'Student records themselves on camera (practice or homework)', parts: 'all' },
   {
     type: 'homework_prompt',
     label: 'Homework',
@@ -1151,17 +1163,17 @@ export function createBlock(
       return {
         id,
         type,
-        prompt: '',
-        instructions: '',
+        prompt: 'Record yourself speaking.',
+        instructions: 'Speak clearly. You may re-record before submitting.',
         maxSeconds: 60,
-        minSeconds: 0,
+        minSeconds: 5,
       }
     case 'video_practice':
       return {
         id,
         type,
-        prompt: '',
-        instructions: '',
+        prompt: 'Record a short video of yourself.',
+        instructions: 'Face the camera and speak clearly. You may re-record before submitting.',
         maxSeconds: 60,
         required: true,
       }

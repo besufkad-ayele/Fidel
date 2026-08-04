@@ -12,6 +12,8 @@ type TimedRecorderProps = {
   minSeconds?: number
   required?: boolean
   mode?: 'student' | 'preview'
+  /** Override the eyebrow label (defaults to Speaking / Video practice) */
+  label?: string
   onBlobReady?: (blob: Blob) => void
 }
 
@@ -23,6 +25,7 @@ export function TimedRecorder({
   minSeconds = 0,
   required,
   mode = 'student',
+  label,
   onBlobReady,
 }: TimedRecorderProps) {
   const [recording, setRecording] = useState(false)
@@ -118,7 +121,7 @@ export function TimedRecorder({
     <div className="space-y-3 rounded-xl border border-cream-300 bg-cream-50 p-5">
       <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
         {kind === 'audio' ? <Mic className="size-3.5" /> : <Video className="size-3.5" />}
-        {kind === 'audio' ? 'Speaking' : 'Video practice'}
+        {label ?? (kind === 'audio' ? 'Speaking' : 'Video practice')}
         {required ? ' · required' : ''}
       </div>
       <p className="font-medium text-green-900">{prompt}</p>
@@ -149,6 +152,7 @@ export function TimedRecorder({
             onClick={() => {
               setUrl(null)
               setSeconds(0)
+              onBlobReady?.(new Blob())
             }}
           >
             Re-record

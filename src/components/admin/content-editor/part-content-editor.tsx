@@ -1342,6 +1342,7 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
   const matching = createBlock('matching_cards')
   const listening = createBlock('listening_practice')
   const speaking = createBlock('speaking_task')
+  const video = createBlock('video_practice')
   const homework = createBlock('homework_prompt')
   const refs = createBlock('references')
   const dos = createBlock('dos_donts')
@@ -1361,6 +1362,7 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
     matching.type !== 'matching_cards' ||
     listening.type !== 'listening_practice' ||
     speaking.type !== 'speaking_task' ||
+    video.type !== 'video_practice' ||
     homework.type !== 'homework_prompt' ||
     refs.type !== 'references' ||
     dos.type !== 'dos_donts'
@@ -1439,6 +1441,11 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
       ...speaking,
       prompt: 'Record yourself greeting a classmate',
       instructions: 'Speak clearly. Aim for 15–30 seconds.',
+    },
+    {
+      ...video,
+      prompt: 'Record a short video of yourself greeting someone',
+      instructions: 'Face the camera and speak clearly.',
     },
     {
       ...homework,

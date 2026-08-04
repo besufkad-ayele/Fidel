@@ -116,6 +116,19 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
       : null) ||
     nextTitle
 
+  const hasVoice =
+    parsed.data.blocks.some((b) => b.type === 'speaking_task') ||
+    (homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowAudio)
+  const hasVideo =
+    parsed.data.blocks.some((b) => b.type === 'video_practice') ||
+    (homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowVideo)
+  const maxAudioFromBlocks = parsed.data.blocks
+    .filter((b): b is Extract<typeof b, { type: 'speaking_task' }> => b.type === 'speaking_task')
+    .map((b) => b.maxSeconds)
+  const maxVideoFromBlocks = parsed.data.blocks
+    .filter((b): b is Extract<typeof b, { type: 'video_practice' }> => b.type === 'video_practice')
+    .map((b) => b.maxSeconds)
+
   const db = await createAdminDb()
   const { error } = await db
     .from('homework_assignments')
@@ -124,6 +137,14 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
       instructions,
       content: parsed.data,
       status,
+      allow_audio: hasVoice,
+      allow_video: hasVideo,
+      ...(maxAudioFromBlocks.length > 0
+        ? { max_audio_seconds: Math.max(...maxAudioFromBlocks) }
+        : {}),
+      ...(maxVideoFromBlocks.length > 0
+        ? { max_video_seconds: Math.max(...maxVideoFromBlocks) }
+        : {}),
       updated_at: nowIso(),
     })
     .eq('id', id)

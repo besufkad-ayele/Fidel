@@ -11,7 +11,7 @@ import { InteractiveMultipleChoice } from '@/components/content/interactive/mult
 import { InteractiveMatching } from '@/components/content/interactive/matching'
 import { InteractiveFlashcards } from '@/components/content/interactive/flashcards'
 import { ListeningPractice } from '@/components/content/interactive/listening-practice'
-import { TimedRecorder } from '@/components/content/interactive/timed-recorder'
+import { RecordingAssignment } from '@/components/content/interactive/recording-assignment'
 import { ComprehensionCheck } from '@/components/content/interactive/comprehension-check'
 import { InteractiveFillBlank } from '@/components/content/interactive/fill-blank'
 import { InteractiveMeaningFill } from '@/components/content/interactive/meaning-fill'
@@ -595,24 +595,28 @@ function renderBlock(
       return <InteractiveMultipleChoice block={block} mode={mode} />
     case 'speaking_task':
       return (
-        <TimedRecorder
+        <RecordingAssignment
           kind="audio"
           prompt={block.prompt}
           instructions={block.instructions}
           maxSeconds={block.maxSeconds}
           minSeconds={block.minSeconds}
           mode={mode}
+          assignmentId={opts?.assignmentId}
+          alreadySubmitted={opts?.alreadySubmitted}
         />
       )
     case 'video_practice':
       return (
-        <TimedRecorder
+        <RecordingAssignment
           kind="video"
           prompt={block.prompt}
           instructions={block.instructions}
           maxSeconds={block.maxSeconds}
           required={block.required}
           mode={mode}
+          assignmentId={opts?.assignmentId}
+          alreadySubmitted={opts?.alreadySubmitted}
         />
       )
     case 'homework_prompt':
