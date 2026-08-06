@@ -17,6 +17,12 @@ import { InteractiveFillBlank } from '@/components/content/interactive/fill-blan
 import { InteractiveMeaningFill } from '@/components/content/interactive/meaning-fill'
 import { InteractiveSentenceBuild } from '@/components/content/interactive/sentence-build'
 import { InteractiveIdCard } from '@/components/content/interactive/id-card'
+import { InteractiveListenGrid } from '@/components/content/interactive/listen-grid'
+import { InteractiveAudioMatch } from '@/components/content/interactive/audio-match'
+import { InteractiveVoiceMcq } from '@/components/content/interactive/voice-mcq'
+import { InteractiveDialogueMcq } from '@/components/content/interactive/dialogue-mcq'
+import { InteractiveDialogueDrag } from '@/components/content/interactive/dialogue-drag'
+import { InteractiveReadAloud } from '@/components/content/interactive/read-aloud'
 import { InteractiveDialogueTable } from '@/components/content/interactive/dialogue-table'
 import {
   InteractiveFillableTable,
@@ -218,6 +224,25 @@ function renderBlock(
       return <InteractiveSentenceBuild block={block} mode={mode} />
     case 'id_card':
       return <InteractiveIdCard block={block} mode={mode} />
+    case 'listen_grid':
+      return <InteractiveListenGrid block={block} mode={mode} />
+    case 'audio_match':
+      return <InteractiveAudioMatch block={block} mode={mode} />
+    case 'voice_mcq':
+      return <InteractiveVoiceMcq block={block} mode={mode} />
+    case 'dialogue_mcq':
+      return <InteractiveDialogueMcq block={block} mode={mode} />
+    case 'dialogue_drag':
+      return <InteractiveDialogueDrag block={block} mode={mode} />
+    case 'read_aloud':
+      return (
+        <InteractiveReadAloud
+          block={block}
+          mode={mode}
+          assignmentId={opts?.assignmentId}
+          alreadySubmitted={opts?.alreadySubmitted}
+        />
+      )
     case 'dialogue_table':
       return <InteractiveDialogueTable block={block} mode={mode} />
     case 'references':

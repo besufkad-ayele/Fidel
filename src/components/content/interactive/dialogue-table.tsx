@@ -150,64 +150,81 @@ export function InteractiveDialogueTable({
           {block.lines.map((line, i) => {
             const alignment = line.alignment ?? (i % 2 === 0 ? 'left' : 'right')
             const isRight = alignment === 'right'
-            const avatarSrc = lessonMediaPublicUrl(line.imageUrl) || line.imageUrl || null
+            const profileSrc = lessonMediaPublicUrl(line.imageUrl) || line.imageUrl || null
             const lineAudio = lessonMediaPublicUrl(line.audioUrl) || line.audioUrl || null
             const tone = i % 2 === 0 ? 'bg-green-700' : 'bg-gold-600'
             const initial = (line.speaker || '?').slice(0, 1).toUpperCase()
+
+            const textPanel = (
+              <div
+                className={cn(
+                  'flex min-w-0 flex-1 flex-col justify-center rounded-lg bg-white/80 p-3 ring-1 ring-cream-300',
+                  isRight && 'text-right',
+                )}
+              >
+                <div
+                  className={cn(
+                    'mb-1 flex items-center justify-between gap-2',
+                    isRight && 'flex-row-reverse',
+                  )}
+                >
+                  <div className={cn('flex items-center gap-2', isRight && 'flex-row-reverse')}>
+                    <div
+                      className={cn(
+                        'flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-cream-50',
+                        tone,
+                      )}
+                    >
+                      {initial}
+                    </div>
+                    <p className="text-[11px] font-semibold tracking-wide text-gold-700 uppercase">
+                      {line.speaker || `Speaker ${i + 1}`}
+                    </p>
+                  </div>
+                  <AudioPlayer
+                    variant="icon"
+                    sources={{ url: lineAudio }}
+                    speakText={line.amharic || undefined}
+                    label={`Play ${line.speaker || 'line'}`}
+                  />
+                </div>
+                {line.amharic ? (
+                  <AmharicText size="lg" className="block text-green-950">
+                    {line.amharic}
+                  </AmharicText>
+                ) : null}
+                {line.transliteration ? (
+                  <p className="mt-0.5 text-sm italic text-green-600">{line.transliteration}</p>
+                ) : null}
+                {line.english ? (
+                  <p className="mt-1 text-sm text-green-800">{line.english}</p>
+                ) : null}
+              </div>
+            )
+
+            const imagePanel = profileSrc ? (
+              <div className="relative w-full overflow-hidden rounded-lg bg-cream-200 ring-1 ring-cream-300 sm:w-[42%] sm:max-w-[14rem] sm:shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={profileSrc}
+                  alt={line.speaker || 'Speaker'}
+                  className="aspect-[4/5] h-full w-full object-cover sm:min-h-[9rem]"
+                />
+              </div>
+            ) : null
+
             return (
               <div
                 key={line.id}
                 className={cn(
-                  'flex gap-3 rounded-lg bg-white/70 p-3 ring-1 ring-cream-300',
-                  isRight && 'flex-row-reverse',
+                  'flex flex-col gap-3 sm:flex-row sm:items-stretch',
+                  /* Left speech → text left, profile on the right half */
+                  /* Right speech → profile left, text on the right half */
+                  isRight && 'sm:flex-row-reverse',
                 )}
               >
-                {avatarSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatarSrc}
-                    alt={line.speaker || 'Speaker'}
-                    className="size-8 shrink-0 rounded-full object-cover ring-1 ring-cream-300"
-                  />
-                ) : (
-                  <div
-                    className={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-cream-50',
-                      tone,
-                    )}
-                  >
-                    {initial}
-                  </div>
-                )}
-                <div className={cn('min-w-0 flex-1', isRight && 'text-right')}>
-                  <div
-                    className={cn(
-                      'mb-1 flex items-center justify-between gap-2',
-                      isRight && 'flex-row-reverse',
-                    )}
-                  >
-                    <p className="text-[11px] font-semibold tracking-wide text-gold-700 uppercase">
-                      {line.speaker || `Speaker ${i + 1}`}
-                    </p>
-                    <AudioPlayer
-                      variant="icon"
-                      sources={{ url: lineAudio }}
-                      speakText={line.amharic || undefined}
-                      label={`Play ${line.speaker || 'line'}`}
-                    />
-                  </div>
-                  {line.amharic ? (
-                    <AmharicText size="lg" className="block text-green-950">
-                      {line.amharic}
-                    </AmharicText>
-                  ) : null}
-                  {line.transliteration ? (
-                    <p className="mt-0.5 text-sm italic text-green-600">{line.transliteration}</p>
-                  ) : null}
-                  {line.english ? (
-                    <p className="mt-1 text-sm text-green-800">{line.english}</p>
-                  ) : null}
-                </div>
+                {textPanel}
+                {imagePanel}
               </div>
             )
           })}

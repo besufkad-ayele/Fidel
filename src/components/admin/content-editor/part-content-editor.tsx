@@ -2272,6 +2272,1303 @@ function BlockFields({
           </div>
         </div>
       )
+    case 'listen_grid':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="The numbers"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Listen and repeat. Write each form below."
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Columns</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={2}
+                max={12}
+                value={block.columns ?? 8}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    columns: Math.min(12, Math.max(2, Number(e.target.value) || 8)),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Student writes</Label>
+              <select
+                className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={block.answerFormat ?? 'word'}
+                disabled={!(block.allowWrite ?? true)}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    answerFormat: e.target.value as 'number' | 'word' | 'image',
+                  })
+                }
+              >
+                <option value="number">Number</option>
+                <option value="word">Word</option>
+                <option value="image">Image upload</option>
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.allowListen ?? true}
+              onChange={(e) => onChange({ ...block, allowListen: e.target.checked })}
+            />
+            Enable model listen for students (play buttons when audio is uploaded — no TTS)
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.allowWrite ?? true}
+              onChange={(e) => onChange({ ...block, allowWrite: e.target.checked })}
+            />
+            Enable write answers (optional for practice — off = listen only)
+          </label>
+          <div className="space-y-2">
+            <Label>Grid cells</Label>
+            {block.items.map((item, i) => (
+              <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.items.length}
+                  label={`Cell ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.items.length) return
+                    onChange({ ...block, items: arrayMove(block.items, from, to) })
+                  }}
+                  onRemove={
+                    block.items.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            items: block.items.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Show as</Label>
+                    <select
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={item.display ?? 'number'}
+                      onChange={(e) => {
+                        const items = [...block.items]
+                        items[i] = {
+                          ...item,
+                          display: e.target.value as 'number' | 'word' | 'image',
+                        }
+                        onChange({ ...block, items })
+                      }}
+                    >
+                      <option value="number">Number</option>
+                      <option value="word">Word</option>
+                      <option value="image">Image</option>
+                    </select>
+                  </div>
+                  <label className="mt-6 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={item.emphasize ?? false}
+                      onChange={(e) => {
+                        const items = [...block.items]
+                        items[i] = { ...item, emphasize: e.target.checked }
+                        onChange({ ...block, items })
+                      }}
+                    />
+                    Emphasize (e.g. tens)
+                  </label>
+                </div>
+                <Input
+                  placeholder="Label (number or word shown / TTS)"
+                  value={item.label}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, label: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Input
+                  placeholder="Speak text override (optional)"
+                  value={item.speakText ?? ''}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, speakText: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <AdminAudioField
+                  name={`listen-grid-audio-${item.id}`}
+                  label="Cell audio (optional — otherwise TTS)"
+                  folder="lesson"
+                  levelId="ha"
+                  clipLabel={`grid-${i + 1}`}
+                  value={item.audioUrl ?? ''}
+                  onChange={(next) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, audioUrl: next }
+                    onChange({ ...block, items })
+                  }}
+                />
+                {item.display === 'image' ? (
+                  <AdminImageField
+                    label="Cell image"
+                    folder="lesson"
+                    levelId="ha"
+                    clipLabel={`grid-img-${i + 1}`}
+                    value={item.imageUrl ?? ''}
+                    onChange={(next) => {
+                      const items = [...block.items]
+                      items[i] = { ...item, imageUrl: next }
+                      onChange({ ...block, items })
+                    }}
+                  />
+                ) : null}
+                <Input
+                  placeholder="Expected answer (optional self-check)"
+                  value={item.answer ?? ''}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, answer: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  items: [
+                    ...block.items,
+                    {
+                      id: crypto.randomUUID(),
+                      display: 'number',
+                      label: '',
+                      emphasize: false,
+                      audioUrl: '',
+                      speakText: '',
+                      imageUrl: '',
+                      answer: '',
+                    },
+                  ],
+                })
+              }
+            >
+              Add cell
+            </Button>
+          </div>
+        </div>
+      )
+    case 'audio_match':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="Which numbers do you hear?"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Match each sound — by chip, text, or voice."
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <div>
+              <Label>Max voice seconds</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={3}
+                max={60}
+                value={block.maxVoiceSeconds ?? 15}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    maxVoiceSeconds: Math.min(60, Math.max(3, Number(e.target.value) || 15)),
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {(
+              [
+                ['allowBank', 'Allow bank (drag chips)'],
+                ['allowText', 'Allow typed text'],
+                ['allowVoice', 'Allow voice recording'],
+                ['allowRetake', 'Allow retake after final attempt'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={block[key] ?? false}
+                  onChange={(e) => onChange({ ...block, [key]: e.target.checked })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div>
+            <Label>Option bank (one per line — answers + distractors)</Label>
+            <Textarea
+              className="mt-1.5 min-h-[88px] font-mono text-xs"
+              value={(block.bank ?? []).join('\n')}
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  bank: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
+                })
+              }
+              placeholder={'6\n12\n21\n7\n11'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Audio slots</Label>
+            {block.items.map((item, i) => (
+              <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.items.length}
+                  label={`Slot ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.items.length) return
+                    onChange({ ...block, items: arrayMove(block.items, from, to) })
+                  }}
+                  onRemove={
+                    block.items.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            items: block.items.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <Input
+                  placeholder="Correct answer (for bank/text check)"
+                  value={item.answer}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, answer: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Input
+                  placeholder="Speak text / TTS (optional)"
+                  value={item.speakText ?? ''}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, speakText: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <AdminAudioField
+                  name={`audio-match-${item.id}`}
+                  label="Slot audio (optional — otherwise TTS)"
+                  folder="lesson"
+                  levelId="ha"
+                  clipLabel={`match-${i + 1}`}
+                  value={item.audioUrl ?? ''}
+                  onChange={(next) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, audioUrl: next }
+                    onChange({ ...block, items })
+                  }}
+                />
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  items: [
+                    ...block.items,
+                    {
+                      id: crypto.randomUUID(),
+                      audioUrl: '',
+                      speakText: '',
+                      answer: '',
+                    },
+                  ],
+                })
+              }
+            >
+              Add slot
+            </Button>
+          </div>
+        </div>
+      )
+    case 'voice_mcq':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="Listen and choose"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Input
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Listen carefully, then select the matching option."
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <Label>Columns</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={4}
+                value={block.columns ?? 2}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    columns: Math.min(4, Math.max(1, Number(e.target.value) || 2)),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({ ...block, maxAttempts: Math.max(1, Number(e.target.value) || 2) })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Context images (optional)</Label>
+            {(block.contextImages ?? []).map((img, i) => (
+              <div key={i} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold tracking-wide text-green-700 uppercase">
+                    Image {i + 1}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      onChange({
+                        ...block,
+                        contextImages: (block.contextImages ?? []).filter((_, idx) => idx !== i),
+                      })
+                    }
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+                <AdminImageField
+                  label="Context image"
+                  folder="lesson"
+                  levelId="ha"
+                  clipLabel={`voice-mcq-ctx-${i + 1}`}
+                  value={img.url ?? ''}
+                  onChange={(next) => {
+                    const contextImages = [...(block.contextImages ?? [])]
+                    contextImages[i] = { ...img, url: next }
+                    onChange({ ...block, contextImages })
+                  }}
+                />
+                <Input
+                  placeholder="Caption (optional)"
+                  value={img.caption ?? ''}
+                  onChange={(e) => {
+                    const contextImages = [...(block.contextImages ?? [])]
+                    contextImages[i] = { ...img, caption: e.target.value }
+                    onChange({ ...block, contextImages })
+                  }}
+                />
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  contextImages: [...(block.contextImages ?? []), { url: '', caption: '' }],
+                })
+              }
+            >
+              Add context image
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Questions</Label>
+            {block.items.map((item, i) => (
+              <div key={item.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.items.length}
+                  label={`Question ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.items.length) return
+                    onChange({ ...block, items: arrayMove(block.items, from, to) })
+                  }}
+                  onRemove={
+                    block.items.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            items: block.items.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <AdminAudioField
+                  name={`voice-mcq-audio-${item.id}`}
+                  label="Question audio (optional — otherwise TTS)"
+                  folder="lesson"
+                  levelId="ha"
+                  clipLabel={`voice-mcq-${i + 1}`}
+                  value={item.audioUrl ?? ''}
+                  onChange={(next) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, audioUrl: next }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <Input
+                  placeholder="Speak text / TTS (optional)"
+                  value={item.speakText ?? ''}
+                  onChange={(e) => {
+                    const items = [...block.items]
+                    items[i] = { ...item, speakText: e.target.value }
+                    onChange({ ...block, items })
+                  }}
+                />
+                <div className="space-y-2">
+                  <Label className="text-xs">Options (mark the correct one)</Label>
+                  {item.options.map((opt, oi) => (
+                    <div key={oi} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`voice-mcq-correct-${item.id}`}
+                        checked={item.correctIndex === oi}
+                        onChange={() => {
+                          const items = [...block.items]
+                          items[i] = { ...item, correctIndex: oi }
+                          onChange({ ...block, items })
+                        }}
+                        aria-label={`Mark option ${oi + 1} correct`}
+                      />
+                      <Input
+                        value={opt}
+                        placeholder={`Option ${oi + 1}`}
+                        onChange={(e) => {
+                          const options = [...item.options]
+                          options[oi] = e.target.value
+                          const items = [...block.items]
+                          items[i] = { ...item, options }
+                          onChange({ ...block, items })
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={item.options.length <= 2}
+                        onClick={() => {
+                          const options = item.options.filter((_, idx) => idx !== oi)
+                          const correctIndex =
+                            item.correctIndex === oi
+                              ? 0
+                              : item.correctIndex > oi
+                                ? item.correctIndex - 1
+                                : item.correctIndex
+                          const items = [...block.items]
+                          items[i] = { ...item, options, correctIndex }
+                          onChange({ ...block, items })
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const items = [...block.items]
+                      items[i] = { ...item, options: [...item.options, ''] }
+                      onChange({ ...block, items })
+                    }}
+                  >
+                    Add option
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  items: [
+                    ...block.items,
+                    {
+                      id: crypto.randomUUID(),
+                      audioUrl: '',
+                      speakText: '',
+                      options: ['', ''],
+                      correctIndex: 0,
+                    },
+                  ],
+                })
+              }
+            >
+              Add question
+            </Button>
+          </div>
+        </div>
+      )
+    case 'dialogue_mcq':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="What is your phone number?"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Textarea
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Listen. What are the phone numbers? Choose the correct option for each person."
+            />
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+            <Label>Scene image</Label>
+            <p className="text-xs text-muted-foreground">
+              Photo above the conversation audio (like a dialogue still).
+            </p>
+            <AdminImageField
+              label="Dialogue image"
+              folder="dialogue"
+              levelId="ha"
+              clipLabel={`dialogue-mcq-${block.id}`}
+              value={block.imageUrl ?? ''}
+              onChange={(next) => onChange({ ...block, imageUrl: next })}
+            />
+            <Input
+              placeholder="Image caption (optional)"
+              value={block.imageCaption ?? ''}
+              onChange={(e) => onChange({ ...block, imageCaption: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+            <Label>Conversation audio</Label>
+            <p className="text-xs text-muted-foreground">
+              One full dialogue track — students listen, then answer the questions below.
+            </p>
+            <AdminAudioField
+              name={`dialogue-mcq-audio-${block.id}`}
+              label="Audio file"
+              folder="dialogue"
+              levelId="ha"
+              clipLabel="dialogue-mcq"
+              value={block.audioUrl ?? ''}
+              onChange={(next) => onChange({ ...block, audioUrl: next })}
+            />
+            <Input
+              placeholder="Audio label"
+              value={block.audioLabel ?? ''}
+              onChange={(e) => onChange({ ...block, audioLabel: e.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    maxAttempts: Math.max(1, Number(e.target.value) || 2),
+                  })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Choice questions</Label>
+            {block.questions.map((q, i) => (
+              <div key={q.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.questions.length}
+                  label={`Question ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.questions.length) return
+                    onChange({
+                      ...block,
+                      questions: arrayMove(block.questions, from, to),
+                    })
+                  }}
+                  onRemove={
+                    block.questions.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            questions: block.questions.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <Input
+                  placeholder="Label (e.g. Ben, Marie)"
+                  value={q.label}
+                  onChange={(e) => {
+                    const questions = [...block.questions]
+                    questions[i] = { ...q, label: e.target.value }
+                    onChange({ ...block, questions })
+                  }}
+                />
+                <div className="space-y-2">
+                  <Label className="text-xs">Options (mark the correct one)</Label>
+                  {q.options.map((opt, oi) => (
+                    <div key={oi} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`dialogue-mcq-correct-${q.id}`}
+                        checked={q.correctIndex === oi}
+                        onChange={() => {
+                          const questions = [...block.questions]
+                          questions[i] = { ...q, correctIndex: oi }
+                          onChange({ ...block, questions })
+                        }}
+                        aria-label={`Mark option ${oi + 1} correct`}
+                      />
+                      <Input
+                        value={opt}
+                        placeholder={`Option ${oi + 1}`}
+                        onChange={(e) => {
+                          const options = [...q.options]
+                          options[oi] = e.target.value
+                          const questions = [...block.questions]
+                          questions[i] = { ...q, options }
+                          onChange({ ...block, questions })
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={q.options.length <= 2}
+                        onClick={() => {
+                          const options = q.options.filter((_, idx) => idx !== oi)
+                          const correctIndex =
+                            q.correctIndex === oi
+                              ? 0
+                              : q.correctIndex > oi
+                                ? q.correctIndex - 1
+                                : q.correctIndex
+                          const questions = [...block.questions]
+                          questions[i] = { ...q, options, correctIndex }
+                          onChange({ ...block, questions })
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const questions = [...block.questions]
+                      questions[i] = { ...q, options: [...q.options, ''] }
+                      onChange({ ...block, questions })
+                    }}
+                  >
+                    Add option
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  questions: [
+                    ...block.questions,
+                    {
+                      id: crypto.randomUUID(),
+                      label: '',
+                      options: ['', ''],
+                      correctIndex: 0,
+                    },
+                  ],
+                })
+              }
+            >
+              Add question
+            </Button>
+          </div>
+        </div>
+      )
+    case 'dialogue_drag':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="In the personnel office"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Textarea
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="What does he say? Listen and drag the sentences to the matching place in the dialogue."
+            />
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+            <Label>Video (optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              YouTube / Vimeo link, or a direct .mp4 URL / storage path.
+            </p>
+            <Input
+              className="mt-1"
+              value={block.videoUrl ?? ''}
+              onChange={(e) => onChange({ ...block, videoUrl: e.target.value })}
+              placeholder="https://www.youtube.com/watch?v=…"
+            />
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+            <Label>Conversation audio (optional)</Label>
+            <AdminAudioField
+              name={`dialogue-drag-audio-${block.id}`}
+              label="Audio file"
+              folder="dialogue"
+              levelId="ha"
+              clipLabel="dialogue-drag"
+              value={block.audioUrl ?? ''}
+              onChange={(next) => onChange({ ...block, audioUrl: next })}
+            />
+            <Input
+              placeholder="Audio label"
+              value={block.audioLabel ?? ''}
+              onChange={(e) => onChange({ ...block, audioLabel: e.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max attempts</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={1}
+                max={10}
+                value={block.maxAttempts ?? 2}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    maxAttempts: Math.max(1, Number(e.target.value) || 2),
+                  })
+                }
+              />
+            </div>
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowRetake ?? false}
+                onChange={(e) => onChange({ ...block, allowRetake: e.target.checked })}
+              />
+              Allow retake
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Sentence bank</Label>
+            <p className="text-xs text-muted-foreground">
+              All drag cards (correct answers + distractors). Slot answers must match these texts.
+            </p>
+            {block.bank.map((chip, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={chip}
+                  placeholder={`Sentence ${i + 1}`}
+                  onChange={(e) => {
+                    const bank = [...block.bank]
+                    bank[i] = e.target.value
+                    onChange({ ...block, bank })
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={block.bank.length <= 1}
+                  onClick={() =>
+                    onChange({
+                      ...block,
+                      bank: block.bank.filter((_, idx) => idx !== i),
+                    })
+                  }
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onChange({ ...block, bank: [...block.bank, ''] })}
+            >
+              Add sentence
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Dialogue turns</Label>
+            <p className="text-xs text-muted-foreground">
+              Alternate fixed lines (prompt) and empty drop slots. Slot answer must match a bank sentence.
+            </p>
+            {block.turns.map((turn, i) => (
+              <div key={turn.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.turns.length}
+                  label={`Turn ${i + 1} · ${turn.kind}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.turns.length) return
+                    onChange({ ...block, turns: arrayMove(block.turns, from, to) })
+                  }}
+                  onRemove={
+                    block.turns.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            turns: block.turns.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Type</Label>
+                    <select
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={turn.kind}
+                      onChange={(e) => {
+                        const kind = e.target.value as 'prompt' | 'slot'
+                        const turns = [...block.turns]
+                        turns[i] = {
+                          ...turn,
+                          kind,
+                          text: kind === 'prompt' ? turn.text || '' : '',
+                          answer: kind === 'slot' ? turn.answer || '' : '',
+                        }
+                        onChange({ ...block, turns })
+                      }}
+                    >
+                      <option value="prompt">Fixed line (shown)</option>
+                      <option value="slot">Drop slot (student fills)</option>
+                    </select>
+                  </div>
+                  {turn.kind === 'prompt' ? (
+                    <div>
+                      <Label className="text-xs">Speaker (optional)</Label>
+                      <Input
+                        className="mt-1"
+                        value={turn.speaker ?? ''}
+                        placeholder="HR / A"
+                        onChange={(e) => {
+                          const turns = [...block.turns]
+                          turns[i] = { ...turn, speaker: e.target.value }
+                          onChange({ ...block, turns })
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <Label className="text-xs">Correct answer</Label>
+                      <select
+                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={turn.answer ?? ''}
+                        onChange={(e) => {
+                          const turns = [...block.turns]
+                          turns[i] = { ...turn, answer: e.target.value }
+                          onChange({ ...block, turns })
+                        }}
+                      >
+                        <option value="">Select from bank…</option>
+                        {block.bank.filter(Boolean).map((chip) => (
+                          <option key={chip} value={chip}>
+                            {chip.length > 60 ? `${chip.slice(0, 60)}…` : chip}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                {turn.kind === 'prompt' ? (
+                  <Textarea
+                    value={turn.text ?? ''}
+                    placeholder="Fixed dialogue line…"
+                    onChange={(e) => {
+                      const turns = [...block.turns]
+                      turns[i] = { ...turn, text: e.target.value }
+                      onChange({ ...block, turns })
+                    }}
+                  />
+                ) : (
+                  <Input
+                    value={turn.answer ?? ''}
+                    placeholder="Or type exact correct sentence"
+                    onChange={(e) => {
+                      const turns = [...block.turns]
+                      turns[i] = { ...turn, answer: e.target.value }
+                      onChange({ ...block, turns })
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onChange({
+                    ...block,
+                    turns: [
+                      ...block.turns,
+                      {
+                        id: crypto.randomUUID(),
+                        kind: 'prompt',
+                        speaker: '',
+                        text: '',
+                        answer: '',
+                      },
+                    ],
+                  })
+                }
+              >
+                Add fixed line
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onChange({
+                    ...block,
+                    turns: [
+                      ...block.turns,
+                      {
+                        id: crypto.randomUUID(),
+                        kind: 'slot',
+                        speaker: '',
+                        text: '',
+                        answer: block.bank.find(Boolean) ?? '',
+                      },
+                    ],
+                  })
+                }
+              >
+                Add drop slot
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    case 'read_aloud':
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label>Title</Label>
+            <Input
+              className="mt-1.5"
+              value={block.title ?? ''}
+              onChange={(e) => onChange({ ...block, title: e.target.value })}
+              placeholder="Read the numbers aloud"
+            />
+          </div>
+          <div>
+            <Label>Prompt</Label>
+            <Textarea
+              className="mt-1.5"
+              value={block.prompt ?? ''}
+              onChange={(e) => onChange({ ...block, prompt: e.target.value })}
+              placeholder="Read each line clearly. At the end, say your phone number."
+            />
+          </div>
+          <div>
+            <Label>Instructions (optional)</Label>
+            <Input
+              className="mt-1.5"
+              value={block.instructions ?? ''}
+              onChange={(e) => onChange({ ...block, instructions: e.target.value })}
+              placeholder="Read each line, then record yourself."
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Max seconds</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={10}
+                max={600}
+                value={block.maxSeconds ?? 90}
+                onChange={(e) =>
+                  onChange({ ...block, maxSeconds: Math.max(10, Number(e.target.value) || 90) })
+                }
+              />
+            </div>
+            <div>
+              <Label>Min seconds</Label>
+              <Input
+                type="number"
+                className="mt-1.5"
+                min={0}
+                max={600}
+                value={block.minSeconds ?? 5}
+                onChange={(e) =>
+                  onChange({ ...block, minSeconds: Math.max(0, Number(e.target.value) || 0) })
+                }
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.allowHoverListen ?? true}
+              onChange={(e) => onChange({ ...block, allowHoverListen: e.target.checked })}
+            />
+            Enable model listen for students (play buttons when audio is uploaded — no TTS)
+          </label>
+          <div className="space-y-2">
+            <Label>Lines to read</Label>
+            {block.lines.map((line, i) => (
+              <div key={line.id} className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <ListReorderControls
+                  index={i}
+                  total={block.lines.length}
+                  label={`Line ${i + 1}`}
+                  onMove={(from, to) => {
+                    if (to < 0 || to >= block.lines.length) return
+                    onChange({ ...block, lines: arrayMove(block.lines, from, to) })
+                  }}
+                  onRemove={
+                    block.lines.length > 1
+                      ? () =>
+                          onChange({
+                            ...block,
+                            lines: block.lines.filter((_, idx) => idx !== i),
+                          })
+                      : undefined
+                  }
+                />
+                <div>
+                  <Label className="text-xs">Show as</Label>
+                  <select
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={line.display ?? 'number'}
+                    onChange={(e) => {
+                      const lines = [...block.lines]
+                      lines[i] = {
+                        ...line,
+                        display: e.target.value as 'number' | 'word' | 'image',
+                      }
+                      onChange({ ...block, lines })
+                    }}
+                  >
+                    <option value="number">Number</option>
+                    <option value="word">Word / phrase</option>
+                    <option value="image">Image</option>
+                  </select>
+                </div>
+                <Input
+                  placeholder="Text shown (e.g. 5, 15, 25, 50)"
+                  value={line.text}
+                  onChange={(e) => {
+                    const lines = [...block.lines]
+                    lines[i] = { ...line, text: e.target.value }
+                    onChange({ ...block, lines })
+                  }}
+                />
+                <Input
+                  placeholder="Speak text override (optional)"
+                  value={line.speakText ?? ''}
+                  onChange={(e) => {
+                    const lines = [...block.lines]
+                    lines[i] = { ...line, speakText: e.target.value }
+                    onChange({ ...block, lines })
+                  }}
+                />
+                <AdminAudioField
+                  name={`read-aloud-audio-${line.id}`}
+                  label="Model audio (optional — otherwise TTS)"
+                  folder="lesson"
+                  levelId="ha"
+                  clipLabel={`read-${i + 1}`}
+                  value={line.audioUrl ?? ''}
+                  onChange={(next) => {
+                    const lines = [...block.lines]
+                    lines[i] = { ...line, audioUrl: next }
+                    onChange({ ...block, lines })
+                  }}
+                />
+                {line.display === 'image' ? (
+                  <AdminImageField
+                    label="Line image"
+                    folder="lesson"
+                    levelId="ha"
+                    clipLabel={`read-img-${i + 1}`}
+                    value={line.imageUrl ?? ''}
+                    onChange={(next) => {
+                      const lines = [...block.lines]
+                      lines[i] = { ...line, imageUrl: next }
+                      onChange({ ...block, lines })
+                    }}
+                  />
+                ) : null}
+              </div>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                onChange({
+                  ...block,
+                  lines: [
+                    ...block.lines,
+                    {
+                      id: crypto.randomUUID(),
+                      display: 'number',
+                      text: '',
+                      speakText: '',
+                      audioUrl: '',
+                      imageUrl: '',
+                    },
+                  ],
+                })
+              }
+            >
+              Add line
+            </Button>
+          </div>
+        </div>
+      )
     case 'dialogue_table':
       return <DialogueTableBlockFields block={block} onChange={onChange} />
     case 'references':

@@ -117,13 +117,18 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
     nextTitle
 
   const hasVoice =
-    parsed.data.blocks.some((b) => b.type === 'speaking_task') ||
+    parsed.data.blocks.some(
+      (b) => b.type === 'speaking_task' || b.type === 'read_aloud' || b.type === 'audio_match',
+    ) ||
     (homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowAudio)
   const hasVideo =
     parsed.data.blocks.some((b) => b.type === 'video_practice') ||
     (homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowVideo)
   const maxAudioFromBlocks = parsed.data.blocks
-    .filter((b): b is Extract<typeof b, { type: 'speaking_task' }> => b.type === 'speaking_task')
+    .filter(
+      (b): b is Extract<typeof b, { type: 'speaking_task' | 'read_aloud' }> =>
+        b.type === 'speaking_task' || b.type === 'read_aloud',
+    )
     .map((b) => b.maxSeconds)
   const maxVideoFromBlocks = parsed.data.blocks
     .filter((b): b is Extract<typeof b, { type: 'video_practice' }> => b.type === 'video_practice')

@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
       : [],
   },
   typedRoutes: true,
+  // Admin image/homework uploads go through Server Actions (default is 1MB).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 }
 
 export default createNextIntlPlugin('./src/i18n/request.ts')(nextConfig)

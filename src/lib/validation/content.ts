@@ -27,6 +27,12 @@ export const contentBlockTypeSchema = z.enum([
   'sentence_build',
   'id_card',
   'dialogue_table',
+  'listen_grid',
+  'audio_match',
+  'voice_mcq',
+  'dialogue_mcq',
+  'dialogue_drag',
+  'read_aloud',
   'references',
   'objectives',
   'dialogue',
@@ -260,6 +266,217 @@ export const dialogueTableBlockSchema = blockBase.extend({
   cells: z.array(z.array(z.string())).default([]),
 })
 
+/**
+ * Goethe-style listen grid (e.g. numbers chart): hover/tap a cell to hear it;
+ * write the form below. Cell content can be a number, word, or image.
+ */
+export const listenGridBlockSchema = blockBase.extend({
+  type: z.literal('listen_grid'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Grid columns (Goethe numbers chart uses 8) */
+  columns: z.number().int().min(2).max(12).default(8),
+  /**
+   * What the student writes in the blank under each cell.
+   * Independent of how the prompt is shown (number / word / image).
+   */
+  answerFormat: z.enum(['number', 'word', 'image']).default('word'),
+  /** When true, students get play buttons for cells with uploaded audio (no TTS). */
+  allowListen: z.boolean().default(true),
+  /**
+   * When true, show answer blanks under each cell.
+   * Optional for practice — turn off for listen-only drills.
+   */
+  allowWrite: z.boolean().default(true),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** How the prompt is shown in the cell */
+        display: z.enum(['number', 'word', 'image']).default('number'),
+        /** Number or word text shown */
+        label: z.string(),
+        /** Stronger weight — e.g. multiples of ten */
+        emphasize: z.boolean().default(false),
+        audioUrl: optionalUrl,
+        /** Optional spoken-label override for authoring notes */
+        speakText: z.string().optional(),
+        /** Shown when display === 'image' */
+        imageUrl: optionalUrl,
+        /** Optional expected answer for self-check */
+        answer: z.string().optional(),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Goethe-style “which numbers do you hear?”:
+ * play each clip, then answer by dragging from a bank, typing, or recording voice.
+ */
+export const audioMatchBlockSchema = blockBase.extend({
+  type: z.literal('audio_match'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  /** Drag chips from the bank into answer slots */
+  allowBank: z.boolean().default(true),
+  /** Type the answer into each slot */
+  allowText: z.boolean().default(true),
+  /** Record a short voice answer for each slot */
+  allowVoice: z.boolean().default(true),
+  maxVoiceSeconds: z.number().int().min(3).max(60).default(15),
+  /**
+   * Option bank at the top (answers + distractors).
+   * Used when the student picks “bank” for a slot.
+   */
+  bank: z.array(z.string()).default([]),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        audioUrl: optionalUrl,
+        /** TTS when no recording */
+        speakText: z.string().optional(),
+        /** Correct text for bank/text self-check */
+        answer: z.string(),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Goethe-style “listen and choose”: grid of audio prompts with radio options.
+ */
+export const voiceMcqBlockSchema = blockBase.extend({
+  type: z.literal('voice_mcq'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Cards per row on wide screens */
+  columns: z.number().int().min(1).max(4).default(2),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  /** Optional context images above the grid (license plate, receipt, etc.) */
+  contextImages: z
+    .array(
+      z.object({
+        url: optionalUrl,
+        caption: z.string().optional(),
+      }),
+    )
+    .default([]),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        audioUrl: optionalUrl,
+        /** TTS when no recording */
+        speakText: z.string().optional(),
+        options: z.array(z.string()).min(2),
+        correctIndex: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Goethe-style dialogue listen → choose:
+ * scene image + one full conversation audio, then labeled MCQ groups
+ * (e.g. “Ben:” / “Marie:” with phone-number options).
+ */
+export const dialogueMcqBlockSchema = blockBase.extend({
+  type: z.literal('dialogue_mcq'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** Scene / context photo above the player */
+  imageUrl: optionalUrl,
+  imageCaption: z.string().optional(),
+  /** Full dialogue / conversation track */
+  audioUrl: optionalUrl,
+  audioLabel: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  questions: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** Speaker or topic label, e.g. "Ben" or "Marie" */
+        label: z.string(),
+        options: z.array(z.string()).min(2),
+        correctIndex: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Goethe-style dialogue completion:
+ * video/audio of a conversation, drag sentences from a bank into empty dialogue slots.
+ */
+export const dialogueDragBlockSchema = blockBase.extend({
+  type: z.literal('dialogue_drag'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  /** YouTube / Vimeo / direct video URL or storage path */
+  videoUrl: optionalUrl,
+  /** Optional conversation audio (if no video, or as alternate) */
+  audioUrl: optionalUrl,
+  audioLabel: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(10).default(2),
+  allowRetake: z.boolean().default(false),
+  /** Draggable sentence bank (answers + distractors) */
+  bank: z.array(z.string()).min(1),
+  /**
+   * Dialogue thread: fixed `prompt` lines and empty `slot` drop zones.
+   * Slot answers must match bank text (normalized).
+   */
+  turns: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        kind: z.enum(['prompt', 'slot']),
+        /** Speaker label for prompt lines (optional) */
+        speaker: z.string().optional(),
+        /** Shown text when kind === 'prompt' */
+        text: z.string().optional(),
+        /** Correct bank sentence when kind === 'slot' */
+        answer: z.string().optional(),
+      }),
+    )
+    .min(1),
+})
+
+/**
+ * Read-aloud practice: show lines (numbers / words / images) for the student to
+ * read, then record their pronunciation below.
+ */
+export const readAloudBlockSchema = blockBase.extend({
+  type: z.literal('read_aloud'),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  instructions: z.string().optional(),
+  maxSeconds: z.number().int().min(10).max(600).default(90),
+  minSeconds: z.number().int().min(0).max(600).default(5),
+  /** When true, students get play buttons for lines with uploaded audio (no TTS). */
+  allowHoverListen: z.boolean().default(true),
+  lines: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        /** How the line is shown */
+        display: z.enum(['number', 'word', 'image']).default('number'),
+        /** Visible text (numbers/words) */
+        text: z.string(),
+        /** TTS / model audio text override */
+        speakText: z.string().optional(),
+        audioUrl: optionalUrl,
+        imageUrl: optionalUrl,
+      }),
+    )
+    .min(1),
+})
+
 export const practiceCategorySchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1),
@@ -444,6 +661,12 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   sentenceBuildBlockSchema,
   idCardBlockSchema,
   dialogueTableBlockSchema,
+  listenGridBlockSchema,
+  audioMatchBlockSchema,
+  voiceMcqBlockSchema,
+  dialogueMcqBlockSchema,
+  dialogueDragBlockSchema,
+  readAloudBlockSchema,
   referencesBlockSchema,
   objectivesBlockSchema,
   dialogueBlockSchema,
@@ -778,6 +1001,7 @@ export function createEmptyPartContent(part: LessonPartKey): LessonPartContent {
       if (
         block.type === 'speaking_task' ||
         block.type === 'video_practice' ||
+        block.type === 'read_aloud' ||
         block.type === 'homework_prompt'
       ) {
         return { ...block, categoryId: speakingId }
@@ -901,6 +1125,45 @@ export const BLOCK_CATALOG: {
     description: 'Read/listen to introductions, then fill a worksheet table (exam-style)',
     parts: 'all',
   },
+  {
+    type: 'listen_grid',
+    label: 'Listen & write grid',
+    description:
+      'Play cell audio; optional write blanks (number/word/image) — turn write off for listen-only practice',
+    parts: 'all',
+  },
+  {
+    type: 'audio_match',
+    label: 'Listen & match',
+    description: 'Play audio slots; students answer by bank chip, typed text, or voice',
+    parts: 'all',
+  },
+  {
+    type: 'voice_mcq',
+    label: 'Voice multiple choice',
+    description: 'Listen to each clip and choose the matching option (radio grid)',
+    parts: 'all',
+  },
+  {
+    type: 'dialogue_mcq',
+    label: 'Dialogue listen & choose',
+    description:
+      'Scene image + one conversation audio, then labeled multiple-choice questions (e.g. phone numbers)',
+    parts: 'all',
+  },
+  {
+    type: 'dialogue_drag',
+    label: 'Dialogue drag-fill',
+    description:
+      'Video/audio dialogue: drag sentences from a bank into empty slots in the transcript',
+    parts: 'all',
+  },
+  {
+    type: 'read_aloud',
+    label: 'Read aloud',
+    description: 'Show lines to read (numbers/words/images); student records themselves',
+    parts: 'all',
+  },
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
@@ -1020,6 +1283,261 @@ export function createBlock(
           { id: crypto.randomUUID(), label: 'Father’s name', hint: '', lines: 1 },
           { id: crypto.randomUUID(), label: 'Age', hint: '', lines: 1 },
           { id: crypto.randomUUID(), label: 'City', hint: '', lines: 1 },
+        ],
+      }
+    case 'listen_grid': {
+      const numbers = [
+        ...Array.from({ length: 30 }, (_, i) => i + 1),
+        40, 50, 60, 70, 80, 90, 100,
+      ]
+      return {
+        id,
+        type,
+        title: 'The numbers',
+        prompt: 'Listen and repeat. Write each form in the space below.',
+        columns: 8,
+        answerFormat: 'word',
+        allowListen: true,
+        allowWrite: true,
+        items: numbers.map((n) => ({
+          id: crypto.randomUUID(),
+          display: 'number' as const,
+          label: String(n),
+          emphasize: n % 10 === 0,
+          audioUrl: '',
+          speakText: String(n),
+          imageUrl: '',
+          answer: '',
+        })),
+      }
+    }
+    case 'audio_match': {
+      const answers = ['6', '12', '21', '33', '50', '66', '71', '87', '91', '100']
+      const distractors = ['7', '11', '13', '16', '17', '29', '30', '41', '60', '70']
+      return {
+        id,
+        type,
+        title: 'Which numbers do you hear?',
+        prompt: 'What belongs together? Match each sound — by chip, text, or voice.',
+        maxAttempts: 2,
+        allowRetake: false,
+        allowBank: true,
+        allowText: true,
+        allowVoice: true,
+        maxVoiceSeconds: 15,
+        bank: [...answers, ...distractors],
+        items: answers.map((n) => ({
+          id: crypto.randomUUID(),
+          audioUrl: '',
+          speakText: n,
+          answer: n,
+        })),
+      }
+    }
+    case 'voice_mcq':
+      return {
+        id,
+        type,
+        title: 'Listen and choose',
+        prompt: 'Listen carefully, then select the matching option.',
+        columns: 2,
+        maxAttempts: 2,
+        allowRetake: false,
+        contextImages: [],
+        items: [
+          {
+            id: crypto.randomUUID(),
+            audioUrl: '',
+            speakText: '8136',
+            options: ['RA KL 8136', 'RE KL 1836', 'RE LK 8136'],
+            correctIndex: 0,
+          },
+          {
+            id: crypto.randomUUID(),
+            audioUrl: '',
+            speakText: '19,15',
+            options: ['19,15 €', '90,15 €', '19,50 €'],
+            correctIndex: 0,
+          },
+          {
+            id: crypto.randomUUID(),
+            audioUrl: '',
+            speakText: '0172 8349601',
+            options: ['0172 8349601', '0172 8349061', '0172 8439601'],
+            correctIndex: 0,
+          },
+          {
+            id: crypto.randomUUID(),
+            audioUrl: '',
+            speakText: 'Auweg 38',
+            options: ['Auweg 38', 'Auwig 83', 'Auweg 83'],
+            correctIndex: 0,
+          },
+        ],
+      }
+    case 'dialogue_mcq':
+      return {
+        id,
+        type,
+        title: 'What is your phone number?',
+        prompt:
+          'Listen. What are the phone numbers? Choose the correct option for each person.',
+        imageUrl: '',
+        imageCaption: '',
+        audioUrl: '',
+        audioLabel: 'Listen to the conversation',
+        maxAttempts: 2,
+        allowRetake: false,
+        questions: [
+          {
+            id: crypto.randomUUID(),
+            label: 'Ben',
+            options: ['0172/45 78 87', '0173/45 78 87', '0172/45 87 78'],
+            correctIndex: 0,
+          },
+          {
+            id: crypto.randomUUID(),
+            label: 'Marie',
+            options: ['0151/23 67 45', '0152/23 67 45', '0151/32 67 54'],
+            correctIndex: 0,
+          },
+        ],
+      }
+    case 'dialogue_drag': {
+      const bank = [
+        'Guten Tag!',
+        'Matteo Kraft.',
+        'Meine E-Mail-Adresse lautet: matteo.kraft@umx.de.',
+        'Ich wohne hier in Frankfurt. In der Bergerstraße 19.',
+        'Ich spreche Deutsch und Spanisch.',
+        'Meine Telefonnummer ist 0163 555 981 02.',
+      ]
+      return {
+        id,
+        type,
+        title: 'In the personnel office',
+        prompt:
+          'What does he say? Listen and drag the sentences to the matching place in the dialogue.',
+        videoUrl: '',
+        audioUrl: '',
+        audioLabel: 'Listen to the conversation',
+        maxAttempts: 2,
+        allowRetake: false,
+        bank,
+        turns: [
+          {
+            id: crypto.randomUUID(),
+            kind: 'prompt' as const,
+            speaker: '',
+            text: 'Guten Tag!',
+            answer: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            kind: 'slot' as const,
+            speaker: '',
+            text: '',
+            answer: 'Guten Tag!',
+          },
+          {
+            id: crypto.randomUUID(),
+            kind: 'prompt' as const,
+            speaker: '',
+            text: 'Wie heißen Sie?',
+            answer: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            kind: 'slot' as const,
+            speaker: '',
+            text: '',
+            answer: 'Matteo Kraft.',
+          },
+          {
+            id: crypto.randomUUID(),
+            kind: 'prompt' as const,
+            speaker: '',
+            text: 'Ah, Sie sind Herr Kraft. Dann kontrolliere ich Ihre Angaben. Wo wohnen Sie, Herr Kraft?',
+            answer: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            kind: 'slot' as const,
+            speaker: '',
+            text: '',
+            answer: 'Ich wohne hier in Frankfurt. In der Bergerstraße 19.',
+          },
+        ],
+      }
+    }
+    case 'read_aloud':
+      return {
+        id,
+        type,
+        title: 'Read the numbers aloud',
+        prompt:
+          'Read each line clearly. At the end, say your phone number. Your teacher can give pronunciation feedback.',
+        instructions: 'Read each line, then record yourself.',
+        maxSeconds: 90,
+        minSeconds: 10,
+        allowHoverListen: true,
+        lines: [
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '5, 15, 25, 50',
+            speakText: '5, 15, 25, 50',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '1, 11, 21, 100',
+            speakText: '1, 11, 21, 100',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '2, 12, 22, 62, 92',
+            speakText: '2, 12, 22, 62, 92',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '6, 60, 16, 76, 66',
+            speakText: '6, 60, 16, 76, 66',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '8, 18, 80, 88, 98',
+            speakText: '8, 18, 80, 88, 98',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'number',
+            text: '9, 49, 59, 19, 99',
+            speakText: '9, 49, 59, 19, 99',
+            audioUrl: '',
+            imageUrl: '',
+          },
+          {
+            id: crypto.randomUUID(),
+            display: 'word',
+            text: 'My phone number',
+            speakText: 'My phone number',
+            audioUrl: '',
+            imageUrl: '',
+          },
         ],
       }
     case 'dialogue_table':

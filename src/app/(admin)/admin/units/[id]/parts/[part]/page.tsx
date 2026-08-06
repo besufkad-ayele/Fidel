@@ -41,8 +41,12 @@ export default async function PartEditorPage({ params }: Props) {
   const partKey = SLUG_TO_PART[partSlug]
   if (!partKey) notFound()
 
-  const db = await createAdminDb()
-  const { data: unit } = await db.from('units').select('id, title, level_id').eq('id', id).maybeSingle()
+  const db = createAdminDb()
+  const { data: unit } = await db
+    .from('units')
+    .select('id, title, level_id')
+    .eq('id', id)
+    .maybeSingle()
   if (!unit) notFound()
 
   const [{ data: part }, { data: unitVocabLinks }, { data: levelVocabulary }] = await Promise.all([
