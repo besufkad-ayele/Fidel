@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, ChevronUp, ChevronDown, FileUp, Loader2 } from 'lucide-react'
+import { GripVertical, Plus, Trash2, ChevronUp, ChevronDown, FileUp, Loader2, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { upsertPartAction } from '@/app/(admin)/admin/content-actions'
 import {
@@ -4326,6 +4326,8 @@ export function PartContentEditor({
   const [showPalette, setShowPalette] = useState(false)
   /** null = intro / before categories; string = category id */
   const [paletteCategoryId, setPaletteCategoryId] = useState<string | null>(null)
+  const [paletteQuery, setPaletteQuery] = useState('')
+  const [blockQuery, setBlockQuery] = useState('')
   const [doc, setDoc] = useState<LessonPartContent>(() =>
     normalizePartContent(part, initialContent),
   )
@@ -4344,6 +4346,31 @@ export function PartContentEditor({
           ),
     [isHomework, part],
   )
+
+  const filteredCatalog = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase()
+    if (!q) return catalog
+    return catalog.filter((item) => {
+      const haystack = [item.label, item.description, item.type].join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [catalog, paletteQuery])
+
+  const blockQueryNormalized = blockQuery.trim().toLowerCase()
+
+  function blockMatchesSearch(block: ContentBlock) {
+    if (!blockQueryNormalized) return true
+    const catalogLabel =
+      BLOCK_CATALOG.find((c) => c.type === block.type)?.label ?? block.type
+    const bits: string[] = [block.type, catalogLabel]
+    if ('title' in block && typeof block.title === 'string') bits.push(block.title)
+    if ('prompt' in block && typeof block.prompt === 'string') bits.push(block.prompt)
+    if ('text' in block && typeof block.text === 'string') bits.push(block.text)
+    if ('instructions' in block && typeof block.instructions === 'string') {
+      bits.push(block.instructions)
+    }
+    return bits.join(' ').toLowerCase().includes(blockQueryNormalized)
+  }
 
   const vocabLookup = useMemo(() => {
     const map: Record<
@@ -4523,9 +4550,20 @@ export function PartContentEditor({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="font-display text-lg text-green-900">Blocks</h3>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-green-500" />
+              <Input
+                className="h-9 pl-8"
+                value={blockQuery}
+                onChange={(e) => setBlockQuery(e.target.value)}
+                placeholder="Search blocks…"
+                aria-label="Search existing blocks"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
               {doc.part === 'language_lesson' || doc.part === 'practice' || doc.part === 'cultural_insight' ? (
                 <Button
                   type="button"
@@ -4572,7 +4610,6 @@ export function PartContentEditor({
                 </Button>
               ) : null}
             </div>
-          </div>
 
           {doc.part === 'practice' || doc.part === 'language_lesson' ? (
             <PracticeCategoriesEditor
@@ -4645,6 +4682,7 @@ export function PartContentEditor({
                 return
               }
               setPaletteCategoryId(categoryId)
+              setPaletteQuery('')
               setShowPalette(true)
             }
 
@@ -4777,9 +4815,22 @@ export function PartContentEditor({
                                 No blocks in this section yet.
                               </p>
                             ) : (
-                              section.blocks.map((block, sectionIndex) =>
-                                renderBlockCard(block, sectionIndex, section),
-                              )
+                              (() => {
+                                const visible = section.blocks.filter(blockMatchesSearch)
+                                if (visible.length === 0) {
+                                  return (
+                                    <p className="rounded-lg border border-dashed border-cream-400 bg-white/70 px-3 py-4 text-sm text-muted-foreground">
+                                      No blocks match “{blockQuery.trim()}”.
+                                    </p>
+                                  )
+                                }
+                                return visible.map((block) => {
+                                  const sectionIndex = section.blocks.findIndex(
+                                    (b) => b.id === block.id,
+                                  )
+                                  return renderBlockCard(block, sectionIndex, section)
+                                })
+                              })()
                             )}
                           </div>
                         </SortableContext>
@@ -4798,33 +4849,53 @@ export function PartContentEditor({
                           </Button>
 
                           {showPalette && paletteCategoryId === section.categoryId ? (
-                            <div className="grid gap-2 rounded-xl border border-cream-300 bg-white p-3 sm:grid-cols-2">
-                              {catalog.map((item, i) => (
-                                <button
-                                  key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
-                                  type="button"
-                                  className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-left hover:border-gold-400"
-                                  onClick={() => {
-                                    setDoc((prev) => ({
-                                      ...prev,
-                                      blocks: insertBlockForCategory(
-                                        prev.blocks,
-                                        createBlock(
-                                          item.type as ContentBlockType,
-                                          item.createOptions,
-                                        ),
-                                        section.categoryId,
-                                      ),
-                                    }))
-                                    setShowPalette(false)
-                                  }}
-                                >
-                                  <p className="text-sm font-medium text-green-900">
-                                    {item.label}
+                            <div className="space-y-2 rounded-xl border border-cream-300 bg-white p-3">
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-green-500" />
+                                <Input
+                                  className="h-9 pl-8"
+                                  value={paletteQuery}
+                                  onChange={(e) => setPaletteQuery(e.target.value)}
+                                  placeholder="Search components…"
+                                  aria-label="Search components to add"
+                                  autoFocus
+                                />
+                              </div>
+                              <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                                {filteredCatalog.length === 0 ? (
+                                  <p className="col-span-full px-1 py-3 text-sm text-muted-foreground">
+                                    No components match “{paletteQuery.trim()}”.
                                   </p>
-                                  <p className="text-xs text-green-600">{item.description}</p>
-                                </button>
-                              ))}
+                                ) : (
+                                  filteredCatalog.map((item, i) => (
+                                    <button
+                                      key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
+                                      type="button"
+                                      className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-left hover:border-gold-400"
+                                      onClick={() => {
+                                        setDoc((prev) => ({
+                                          ...prev,
+                                          blocks: insertBlockForCategory(
+                                            prev.blocks,
+                                            createBlock(
+                                              item.type as ContentBlockType,
+                                              item.createOptions,
+                                            ),
+                                            section.categoryId,
+                                          ),
+                                        }))
+                                        setShowPalette(false)
+                                        setPaletteQuery('')
+                                      }}
+                                    >
+                                      <p className="text-sm font-medium text-green-900">
+                                        {item.label}
+                                      </p>
+                                      <p className="text-xs text-green-600">{item.description}</p>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
                             </div>
                           ) : null}
                         </div>
