@@ -93,7 +93,7 @@ export default async function HomeworkEditorPage({ params }: Props) {
           .map((l: { vocabulary_id: string }) => l.vocabulary_id),
       )
 
-      const mapped = (levelVocabulary ?? []).map(
+      const mapped: VocabOption[] = (levelVocabulary ?? []).map(
         (v: {
           id: string
           amharic: string
