@@ -267,8 +267,9 @@ export const dialogueTableBlockSchema = blockBase.extend({
 })
 
 /**
- * Goethe-style listen grid (e.g. numbers chart): hover/tap a cell to hear it;
- * write the form below. Cell content can be a number, word, or image.
+ * Goethe-style listen grid (e.g. numbers chart):
+ * - write: play cell audio + write blanks (number / word / image)
+ * - mark_understood: hover plays that cell’s uploaded audio only; one button confirms understanding
  */
 export const listenGridBlockSchema = blockBase.extend({
   type: z.literal('listen_grid'),
@@ -277,14 +278,21 @@ export const listenGridBlockSchema = blockBase.extend({
   /** Grid columns (Goethe numbers chart uses 8) */
   columns: z.number().int().min(2).max(12).default(8),
   /**
+   * Student activity:
+   * - write — blanks under each cell
+   * - mark_understood — hover to hear; one “I understand” button
+   */
+  activityMode: z.enum(['write', 'mark_understood']).default('write'),
+  /**
    * What the student writes in the blank under each cell.
    * Independent of how the prompt is shown (number / word / image).
+   * Only used when activityMode === 'write'.
    */
   answerFormat: z.enum(['number', 'word', 'image']).default('word'),
-  /** When true, students get play buttons for cells with uploaded audio (no TTS). */
+  /** When true, students can hear cells with uploaded audio (no TTS). */
   allowListen: z.boolean().default(true),
   /**
-   * When true, show answer blanks under each cell.
+   * When true (and activityMode is write), show answer blanks under each cell.
    * Optional for practice — turn off for listen-only drills.
    */
   allowWrite: z.boolean().default(true),
@@ -625,10 +633,10 @@ export const homeworkPromptBlockSchema = blockBase.extend({
   assignmentLink: z.string().default(''),
   assignmentFileUrl: z.string().default(''),
   assignmentFileName: z.string().default(''),
-  /** Student response channels */
+  /** Student response channels — writing only; use speaking_task / video_practice blocks for A/V */
   allowText: z.boolean().default(true),
-  allowAudio: z.boolean().default(true),
-  allowVideo: z.boolean().default(true),
+  allowAudio: z.boolean().default(false),
+  allowVideo: z.boolean().default(false),
   /** Writing: paste a Google Drive link */
   allowDriveLink: z.boolean().default(true),
   /** Writing: upload a single image (see maxImageBytes) */
@@ -957,13 +965,13 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       type: 'homework_prompt',
       title: 'Unit homework',
       instructions:
-        'Complete the worksheet (link or file below). For writing, paste a Drive link or upload a photo (max 1MB). You may also upload or record audio/video.',
+        'Complete the worksheet (link or file below). For writing, paste a Drive link or upload a photo.',
       assignmentLink: '',
       assignmentFileUrl: '',
       assignmentFileName: '',
       allowText: true,
-      allowAudio: true,
-      allowVideo: true,
+      allowAudio: false,
+      allowVideo: false,
       allowDriveLink: true,
       allowImage: true,
       allowFiles: false,
@@ -1059,8 +1067,11 @@ export const BLOCK_CATALOG: {
   label: string
   description: string
   parts: LessonPartKey[] | 'all'
-  /** Extra create options (e.g. table variant) */
-  createOptions?: { tableVariant?: 'static' | 'multi_row' }
+  /** Extra create options (e.g. table variant, listen grid activity) */
+  createOptions?: {
+    tableVariant?: 'static' | 'multi_row'
+    activityMode?: 'write' | 'mark_understood'
+  }
 }[] = [
   { type: 'heading', label: 'Heading', description: 'Section title', parts: 'all' },
   { type: 'rich_text', label: 'Text', description: 'Markdown paragraph or essay', parts: 'all' },
@@ -1127,10 +1138,19 @@ export const BLOCK_CATALOG: {
   },
   {
     type: 'listen_grid',
-    label: 'Listen & write grid',
+    label: 'Listen & write',
     description:
-      'Play cell audio; optional write blanks (number/word/image) — turn write off for listen-only practice',
+      'Grid of numbers, words, or images — play cell audio and write answers below',
     parts: 'all',
+    createOptions: { activityMode: 'write' },
+  },
+  {
+    type: 'listen_grid',
+    label: 'Listen & mark',
+    description:
+      'Grid of numbers, words, or images — hover to hear that cell’s audio, then confirm with I understand',
+    parts: 'all',
+    createOptions: { activityMode: 'mark_understood' },
   },
   {
     type: 'audio_match',
@@ -1171,8 +1191,9 @@ export const BLOCK_CATALOG: {
   { type: 'video_practice', label: 'Video recording', description: 'Student records themselves on camera (practice or homework)', parts: 'all' },
   {
     type: 'homework_prompt',
-    label: 'Homework',
-    description: 'Assign via link/file · students reply with audio/video, Drive link, or image ≤1MB',
+    label: 'Homework writing form',
+    description:
+      'Materials + Drive / photo / text answers. Add Voice or Video recording blocks for spoken work.',
     parts: 'all',
   },
   { type: 'references', label: 'References', description: 'Articles and videos', parts: 'all' },
@@ -1182,7 +1203,10 @@ export const BLOCK_CATALOG: {
 
 export function createBlock(
   type: ContentBlockType,
-  options?: { tableVariant?: 'static' | 'multi_row' },
+  options?: {
+    tableVariant?: 'static' | 'multi_row'
+    activityMode?: 'write' | 'mark_understood'
+  },
 ): ContentBlock {
   const id = crypto.randomUUID()
   switch (type) {
@@ -1290,15 +1314,20 @@ export function createBlock(
         ...Array.from({ length: 30 }, (_, i) => i + 1),
         40, 50, 60, 70, 80, 90, 100,
       ]
+      const activityMode = options?.activityMode ?? 'write'
+      const isMark = activityMode === 'mark_understood'
       return {
         id,
         type,
         title: 'The numbers',
-        prompt: 'Listen and repeat. Write each form in the space below.',
+        prompt: isMark
+          ? 'Hover each cell to listen. When you understand, press I understand.'
+          : 'Listen and repeat. Write each form in the space below.',
         columns: 8,
+        activityMode,
         answerFormat: 'word',
         allowListen: true,
-        allowWrite: true,
+        allowWrite: !isMark,
         items: numbers.map((n) => ({
           id: crypto.randomUUID(),
           display: 'number' as const,
@@ -1705,8 +1734,8 @@ export function createBlock(
         assignmentFileUrl: '',
         assignmentFileName: '',
         allowText: true,
-        allowAudio: true,
-        allowVideo: true,
+        allowAudio: false,
+        allowVideo: false,
         allowDriveLink: true,
         allowImage: true,
         allowFiles: false,

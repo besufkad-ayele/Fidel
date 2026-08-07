@@ -6,8 +6,8 @@ import { requireRole } from '@/lib/auth/guards'
 import { createAdminDb, writeAudit } from '@/lib/admin/db'
 import type { ActionResult } from '@/app/(admin)/admin/actions'
 import {
-  createEmptyPartContent,
   lessonPartContentSchema,
+  type ContentBlock,
 } from '@/lib/validation/content'
 
 const PUBLISH_STATUSES = new Set(['draft', 'in_review', 'published', 'archived'])
@@ -17,10 +17,14 @@ function nowIso() {
 }
 
 function emptyHomeworkContent(title: string) {
-  const doc = createEmptyPartContent('practice')
+  // Blank studio doc — no starter speaking/homework_prompt blocks.
+  // Admins add only the blocks they want (e.g. one voice task).
   return {
-    ...doc,
+    part: 'practice' as const,
+    version: 1 as const,
     title: title || 'Homework',
+    categories: [] as { id: string; name: string }[],
+    blocks: [] as ContentBlock[],
   }
 }
 
@@ -49,7 +53,8 @@ export async function createHomeworkAssignmentAction(formData: FormData) {
       is_unit_default: isUnitDefault,
       student_id: null,
       assigned_by: user.id,
-      allow_text: true,
+      // Answer options come only from studio blocks (speaking / homework_prompt), not create toggles.
+      allow_text: false,
       allow_audio: allowAudio,
       allow_video: allowVideo,
       allow_files: false,
@@ -124,6 +129,10 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
   const hasVideo =
     parsed.data.blocks.some((b) => b.type === 'video_practice') ||
     (homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowVideo)
+  const hasTextForm =
+    homeworkBlock?.type === 'homework_prompt' &&
+    (homeworkBlock.allowText || homeworkBlock.allowDriveLink || homeworkBlock.allowImage)
+  const hasFiles = homeworkBlock?.type === 'homework_prompt' && homeworkBlock.allowFiles
   const maxAudioFromBlocks = parsed.data.blocks
     .filter(
       (b): b is Extract<typeof b, { type: 'speaking_task' | 'read_aloud' }> =>
@@ -142,8 +151,10 @@ export async function upsertHomeworkContentAction(formData: FormData): Promise<A
       instructions,
       content: parsed.data,
       status,
+      allow_text: Boolean(hasTextForm),
       allow_audio: hasVoice,
       allow_video: hasVideo,
+      allow_files: Boolean(hasFiles),
       ...(maxAudioFromBlocks.length > 0
         ? { max_audio_seconds: Math.max(...maxAudioFromBlocks) }
         : {}),

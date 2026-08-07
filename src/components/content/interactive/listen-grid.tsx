@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Volume2 } from 'lucide-react'
+import { Check, Volume2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { AmharicText } from '@/components/shared/amharic-text'
 import { lessonMediaPublicUrl } from '@/lib/media/urls'
 import type { z } from 'zod'
@@ -41,7 +42,9 @@ function answerPlaceholder(format: Block['answerFormat']) {
 }
 
 /**
- * Listen & write grid: model listen only when admin enabled + audio uploaded; write below.
+ * Listen grid:
+ * - write — play buttons + answer blanks
+ * - mark_understood — hover/tap plays that cell’s uploaded audio; one button to confirm understanding
  */
 export function InteractiveListenGrid({
   block,
@@ -52,20 +55,25 @@ export function InteractiveListenGrid({
 }) {
   const items = block.items ?? []
   const columns = Math.min(12, Math.max(2, block.columns ?? 8))
+  const activityMode = block.activityMode ?? 'write'
+  const isMarkMode = activityMode === 'mark_understood'
   /** Admin-controlled; when false, no play UI. Uploaded audio only — no TTS. */
   const listenEnabled = block.allowListen ?? true
-  /** Optional for practice — when false, listen-only (no answer blanks). */
-  const writeEnabled = block.allowWrite ?? true
+  /** Optional for write practice — when false, listen-only (no answer blanks). */
+  const writeEnabled = !isMarkMode && (block.allowWrite ?? true)
 
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((item) => [item.id, ''])),
   )
   const [imageAnswers, setImageAnswers] = useState<Record<string, string>>({})
+  const [completed, setCompleted] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current)
       for (const el of Object.values(audioRefs.current)) el?.pause()
     }
   }, [])
@@ -92,6 +100,24 @@ export function InteractiveListenGrid({
     void el.play().catch(() => setActiveId(null))
   }
 
+  function onHoverEnter(item: Item, pointerType: string) {
+    if (!isMarkMode || !listenEnabled) return
+    // Touch uses tap-to-play; hover is mouse/pen only
+    if (pointerType === 'touch') return
+    if (!itemAudioSrc(item)) return
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    // Small delay avoids rapid play/stop when skimming across cells
+    hoverTimer.current = setTimeout(() => playItem(item), 80)
+  }
+
+  function onCellActivate(item: Item) {
+    if (!isMarkMode) return
+    // Touch/keyboard: play on activate. Mouse hover already started playback.
+    if (listenEnabled && itemAudioSrc(item) && activeId !== item.id) {
+      playItem(item)
+    }
+  }
+
   function onImagePick(itemId: string, file: File | undefined) {
     if (!file || !file.type.startsWith('image/')) {
       setImageAnswers((prev) => {
@@ -108,20 +134,35 @@ export function InteractiveListenGrid({
     })
   }
 
+  const eyebrow = isMarkMode
+    ? 'Listen & mark'
+    : writeEnabled
+      ? 'Listen & write'
+      : 'Listen'
+
   return (
     <div className="space-y-3">
       <div>
         <p className="text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
-          {writeEnabled ? 'Listen & write' : 'Listen'}
+          {eyebrow}
         </p>
         {block.title ? (
           <p className="mt-1 font-display text-2xl text-green-800">{block.title}</p>
         ) : null}
         {block.prompt ? <p className="mt-1 text-sm text-green-700">{block.prompt}</p> : null}
+        {isMarkMode ? (
+          <p className="mt-1 text-xs text-green-600">
+            Hover a cell to hear its audio
+            {mode === 'preview' ? ' (preview)' : ''}.
+          </p>
+        ) : null}
       </div>
 
       <div
-        className="overflow-x-auto rounded-xl border border-cream-400 bg-cream-50"
+        className={cn(
+          'overflow-x-auto rounded-xl border bg-cream-50',
+          completed ? 'border-success-500' : 'border-cream-400',
+        )}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${columns}, minmax(4.5rem, 1fr))`,
@@ -132,6 +173,7 @@ export function InteractiveListenGrid({
           const audioSrc = itemAudioSrc(item)
           const canPlay = listenEnabled && Boolean(audioSrc)
           const isActive = activeId === item.id
+
           return (
             <div
               key={item.id}
@@ -139,8 +181,25 @@ export function InteractiveListenGrid({
                 'flex flex-col items-center gap-2 border border-cream-300 px-2 py-3',
                 writeEnabled ? 'min-h-[6.5rem]' : 'min-h-[4.5rem]',
                 'transition-colors',
-                isActive ? 'bg-gold-50' : 'bg-cream-50',
+                isActive ? 'bg-gold-50' : completed ? 'bg-success-50/50' : 'bg-cream-50',
+                isMarkMode && canPlay && 'cursor-pointer',
               )}
+              onPointerEnter={(e) => onHoverEnter(item, e.pointerType)}
+              onClick={() => onCellActivate(item)}
+              role={isMarkMode && canPlay ? 'button' : undefined}
+              tabIndex={isMarkMode && canPlay ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (!isMarkMode) return
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onCellActivate(item)
+                }
+              }}
+              aria-label={
+                isMarkMode
+                  ? `${item.label || 'Item'}${canPlay ? ', hover or tap to play' : ''}`
+                  : undefined
+              }
             >
               <audio
                 ref={(el) => {
@@ -168,7 +227,9 @@ export function InteractiveListenGrid({
                 ) : (
                   <LabelText text={item.label} emphasize={item.emphasize} />
                 )}
-                {canPlay ? (
+
+                {/* Write mode: explicit play button. Mark mode: hover/tap plays — subtle cue only. */}
+                {!isMarkMode && canPlay ? (
                   <button
                     type="button"
                     onClick={() => playItem(item)}
@@ -182,6 +243,15 @@ export function InteractiveListenGrid({
                   >
                     <Volume2 className="size-3.5" />
                   </button>
+                ) : null}
+                {isMarkMode && canPlay ? (
+                  <Volume2
+                    className={cn(
+                      'size-3.5',
+                      isActive ? 'text-gold-600' : 'text-green-400',
+                    )}
+                    aria-hidden
+                  />
                 ) : null}
               </div>
 
@@ -228,9 +298,36 @@ export function InteractiveListenGrid({
         })}
       </div>
 
+      {isMarkMode ? (
+        <div className="flex flex-wrap items-center gap-3">
+          {completed ? (
+            <p className="inline-flex items-center gap-2 text-sm font-medium text-success-500">
+              <Check className="size-4" strokeWidth={3} />
+              Marked as understood
+            </p>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={mode === 'preview'}
+              onClick={() => setCompleted(true)}
+            >
+              I understand
+            </Button>
+          )}
+          {mode === 'preview' && !completed ? (
+            <span className="text-xs text-green-500">Preview — button disabled</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <p className="text-[10px] tracking-wide text-green-600 uppercase">
         {mode === 'preview' ? 'Preview · ' : ''}
-        {writeEnabled ? `Write ${block.answerFormat} below · ` : 'Listen only · '}
+        {isMarkMode
+          ? 'Hover to listen · Confirm with one button · '
+          : writeEnabled
+            ? `Write ${block.answerFormat} below · `
+            : 'Listen only · '}
         {items.length} items
       </p>
     </div>

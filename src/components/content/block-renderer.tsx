@@ -629,6 +629,7 @@ function renderBlock(
           mode={mode}
           assignmentId={opts?.assignmentId}
           alreadySubmitted={opts?.alreadySubmitted}
+          blockId={block.id}
         />
       )
     case 'video_practice':
@@ -642,6 +643,7 @@ function renderBlock(
           mode={mode}
           assignmentId={opts?.assignmentId}
           alreadySubmitted={opts?.alreadySubmitted}
+          blockId={block.id}
         />
       )
     case 'homework_prompt':
@@ -675,6 +677,22 @@ export function BlockRenderer({
   const categoryIds = useMemo(() => new Set(categories.map((c) => c.id)), [categories])
   const [activeCategory, setActiveCategory] = useState(() => categories[0]?.id ?? '')
 
+  /** Never auto-inject leftover homework_prompt forms on student homework pages. */
+  const visibleBlocks = useMemo(() => {
+    const blocks = content.blocks
+    if (mode !== 'student' || !assignmentId) return blocks
+    // Only show an explicit homework_prompt if the admin kept it and there is no
+    // speaking/video task (those use the shared Submit homework bar instead).
+    const hasRecordingTask = blocks.some(
+      (b) => b.type === 'speaking_task' || b.type === 'video_practice',
+    )
+    const hasIdCard = blocks.some((b) => b.type === 'id_card')
+    if (hasRecordingTask || hasIdCard) {
+      return blocks.filter((b) => b.type !== 'homework_prompt')
+    }
+    return blocks
+  }, [assignmentId, content.blocks, mode])
+
   const resolvedActive = useMemo(() => {
     if (categories.length === 0) return ''
     if (categories.some((c) => c.id === activeCategory)) return activeCategory
@@ -683,15 +701,15 @@ export function BlockRenderer({
 
   /** Intro / details shown above tabs when no category is assigned. */
   const beforeBlocks = useMemo(() => {
-    if (categories.length === 0) return content.blocks
-    return content.blocks.filter((b) => !b.categoryId || !categoryIds.has(b.categoryId))
-  }, [categories.length, categoryIds, content.blocks])
+    if (categories.length === 0) return visibleBlocks
+    return visibleBlocks.filter((b) => !b.categoryId || !categoryIds.has(b.categoryId))
+  }, [categories.length, categoryIds, visibleBlocks])
 
   const categoryBlocks = useMemo(() => {
     if (categories.length === 0) return []
     if (!resolvedActive) return []
-    return content.blocks.filter((b) => b.categoryId === resolvedActive)
-  }, [resolvedActive, categories.length, content.blocks])
+    return visibleBlocks.filter((b) => b.categoryId === resolvedActive)
+  }, [resolvedActive, categories.length, visibleBlocks])
 
   const blockOpts = { assignmentId, alreadySubmitted }
 

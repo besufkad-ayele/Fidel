@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AmharicText } from '@/components/shared/amharic-text'
 import { lessonMediaPublicUrl } from '@/lib/media/urls'
 import type { z } from 'zod'
 import type { idCardBlockSchema } from '@/lib/validation/content'
 import { cn } from '@/lib/utils'
+import { useHomeworkActivity } from '@/components/content/interactive/homework-activity-shell'
 
 type Block = z.infer<typeof idCardBlockSchema>
 
@@ -34,15 +35,33 @@ export function InteractiveIdCard({
   block: Block
   mode?: 'student' | 'preview'
 }) {
+  const activity = useHomeworkActivity()
   const fields = block.fields ?? []
   const photoSrc = lessonMediaPublicUrl(block.photoUrl) || block.photoUrl || null
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.id, ''])),
   )
+  const [invalidIds, setInvalidIds] = useState<string[]>([])
+  const answersRef = useRef(answers)
+  answersRef.current = answers
+  const fieldsKey = fields.map((f) => `${f.id}:${f.label}`).join('|')
 
   function updateAnswer(id: string, value: string) {
     setAnswers((prev) => ({ ...prev, [id]: value }))
+    setInvalidIds((prev) => prev.filter((x) => x !== id))
   }
+
+  useEffect(() => {
+    if (!activity || mode !== 'student') return
+    return activity.registerIdCard({
+      blockId: block.id,
+      fields: fields.map((f) => ({ id: f.id, label: f.label || 'Field' })),
+      getAnswers: () => answersRef.current,
+      setInvalidFields: setInvalidIds,
+    })
+    // fieldsKey captures field id/label changes without depending on a new array each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fieldsKey stands in for fields
+  }, [activity, block.id, fieldsKey, mode])
 
   return (
     <div className="space-y-3">
@@ -88,9 +107,15 @@ export function InteractiveIdCard({
             {fields.map((field) => {
               const lines = Math.min(4, Math.max(1, field.lines ?? 1))
               const isMulti = lines > 1
+              const invalid = invalidIds.includes(field.id)
               return (
                 <label key={field.id} className="block space-y-1">
-                  <span className="text-xs font-semibold tracking-wide text-green-700 uppercase">
+                  <span
+                    className={cn(
+                      'text-xs font-semibold tracking-wide uppercase',
+                      invalid ? 'text-danger-600' : 'text-green-700',
+                    )}
+                  >
                     <FieldLabel text={field.label || 'Field'} />
                   </span>
                   {isMulti ? (
@@ -99,11 +124,13 @@ export function InteractiveIdCard({
                       onChange={(e) => updateAnswer(field.id, e.target.value)}
                       rows={lines}
                       placeholder={field.hint || 'Write here…'}
+                      aria-invalid={invalid}
                       className={cn(
-                        'w-full resize-none rounded-md border-0 border-b-2 border-cream-400',
-                        'bg-transparent px-0 py-1.5 text-sm text-green-900',
+                        'w-full resize-none rounded-md border-0 border-b-2 bg-transparent px-0 py-1.5 text-sm text-green-900',
                         'placeholder:text-green-400/70 outline-none',
-                        'focus:border-gold-500',
+                        invalid
+                          ? 'border-danger-500 bg-danger-50/40 focus:border-danger-600'
+                          : 'border-cream-400 focus:border-gold-500',
                       )}
                     />
                   ) : (
@@ -112,14 +139,19 @@ export function InteractiveIdCard({
                       value={answers[field.id] ?? ''}
                       onChange={(e) => updateAnswer(field.id, e.target.value)}
                       placeholder={field.hint || 'Write here…'}
+                      aria-invalid={invalid}
                       className={cn(
-                        'w-full border-0 border-b-2 border-cream-400 bg-transparent',
-                        'px-0 py-1.5 text-sm text-green-900',
+                        'w-full border-0 border-b-2 bg-transparent px-0 py-1.5 text-sm text-green-900',
                         'placeholder:text-green-400/70 outline-none',
-                        'focus:border-gold-500',
+                        invalid
+                          ? 'border-danger-500 bg-danger-50/40 focus:border-danger-600'
+                          : 'border-cream-400 focus:border-gold-500',
                       )}
                     />
                   )}
+                  {invalid ? (
+                    <p className="text-xs font-medium text-danger-600">This field is required</p>
+                  ) : null}
                 </label>
               )
             })}

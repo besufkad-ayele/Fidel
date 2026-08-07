@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { BlockRenderer } from '@/components/content/block-renderer'
-import { HomeworkSubmission } from '@/components/content/interactive/homework-submission'
+import { HomeworkActivityShell } from '@/components/content/interactive/homework-activity-shell'
 import { Button } from '@/components/ui/button'
 import { requireRole } from '@/lib/auth/guards'
 import { getPublishedHomeworkForStudent } from '@/lib/data/homework'
@@ -36,9 +36,6 @@ export default async function StudentHomeworkDetailPage({ params }: Props) {
   if (!assignment) notFound()
 
   const due = formatDue(assignment.dueAt)
-  const hasPromptBlock = Boolean(
-    assignment.content?.blocks.some((b) => b.type === 'homework_prompt'),
-  )
   const alreadySubmitted =
     assignment.submissionStatus === 'submitted' ||
     assignment.submissionStatus === 'reviewed' ||
@@ -86,15 +83,20 @@ export default async function StudentHomeworkDetailPage({ params }: Props) {
         </div>
       ) : null}
 
-      {assignment.content ? (
+      {assignment.content && assignment.content.blocks.length > 0 ? (
         <div className="rounded-xl border border-cream-300 bg-cream-50 p-6 shadow-card sm:p-8">
-          <BlockRenderer
-            content={assignment.content}
-            vocabulary={assignment.vocabulary}
-            mode="student"
+          <HomeworkActivityShell
             assignmentId={assignment.id}
             alreadySubmitted={alreadySubmitted}
-          />
+          >
+            <BlockRenderer
+              content={assignment.content}
+              vocabulary={assignment.vocabulary}
+              mode="student"
+              assignmentId={assignment.id}
+              alreadySubmitted={alreadySubmitted}
+            />
+          </HomeworkActivityShell>
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-cream-400 bg-cream-50 p-8 text-center">
@@ -106,32 +108,6 @@ export default async function StudentHomeworkDetailPage({ params }: Props) {
           ) : null}
         </div>
       )}
-
-      {!hasPromptBlock ? (
-        <HomeworkSubmission
-          assignmentId={assignment.id}
-          alreadySubmitted={alreadySubmitted}
-          mode="student"
-          block={{
-            id: `fallback-${assignment.id}`,
-            type: 'homework_prompt',
-            title: assignment.title,
-            instructions: assignment.instructions || t('submitFallbackHint'),
-            assignmentLink: '',
-            assignmentFileUrl: '',
-            assignmentFileName: '',
-            allowText: assignment.allowText,
-            allowAudio: assignment.allowAudio,
-            allowVideo: assignment.allowVideo,
-            allowDriveLink: assignment.allowText,
-            allowImage: assignment.allowText || assignment.allowFiles,
-            allowFiles: assignment.allowFiles,
-            maxAudioSeconds: assignment.maxAudioSeconds ?? 60,
-            maxVideoSeconds: assignment.maxVideoSeconds ?? 90,
-            maxImageBytes: 1_048_576,
-          }}
-        />
-      ) : null}
     </div>
   )
 }

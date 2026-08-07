@@ -42,12 +42,15 @@ export function VocabularyCreateForm({
   units = [],
   defaultLevelId = 'ha',
   defaultUnitId,
+  /** When true, unit is optional — word stays in the general level bank. */
+  allowUnassigned = false,
   redirectHint,
 }: {
   units?: VocabUnitOption[]
   defaultLevelId?: string
   /** When set, the word is created and assigned to this unit. */
   defaultUnitId?: string
+  allowUnassigned?: boolean
   redirectHint?: string
 }) {
   const [levelId, setLevelId] = useState(defaultLevelId)
@@ -89,20 +92,54 @@ export function VocabularyCreateForm({
         </select>
       </div>
 
-      {!defaultUnitId && levelUnits.length > 0 ? (
+      {!defaultUnitId && allowUnassigned ? (
         <div>
-          <Label>Assign to units</Label>
+          <Label htmlFor="unitId">Assign to unit (optional)</Label>
           <p className="mt-1 text-xs text-muted-foreground">
-            Same word can belong to multiple units.
+            Leave as General to keep this word in the level bank only. Assign to a unit later anytime.
           </p>
-          <div className="mt-2 max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-cream-300 p-2">
+          <select
+            id="unitId"
+            name="unitId"
+            className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            defaultValue=""
+          >
+            <option value="">General — no unit</option>
             {levelUnits.map((u) => (
-              <label key={u.id} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="unitIds" value={u.id} className="size-4" />
-                <span>{u.title}</span>
-              </label>
+              <option key={u.id} value={u.id}>
+                {u.title}
+              </option>
             ))}
-          </div>
+          </select>
+        </div>
+      ) : null}
+
+      {!defaultUnitId && !allowUnassigned && levelUnits.length > 0 ? (
+        <div>
+          <Label htmlFor="unitId">Add to unit</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Words are created inside a unit. You can assign more units after saving.
+          </p>
+          <select
+            id="unitId"
+            name="unitId"
+            required
+            className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Select unit…
+            </option>
+            {levelUnits.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.title}
+              </option>
+            ))}
+          </select>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input type="checkbox" name="isCore" className="size-4" defaultChecked />
+            Mark as core word for this unit
+          </label>
         </div>
       ) : null}
 
@@ -144,7 +181,11 @@ export function VocabularyCreateForm({
       </div>
 
       <PendingSubmitButton className="w-full" pendingLabel="Saving…">
-        {defaultUnitId ? 'Add to this unit' : 'Add vocabulary'}
+        {defaultUnitId
+          ? 'Add to this unit'
+          : allowUnassigned
+            ? 'Add general vocabulary'
+            : 'Add vocabulary'}
       </PendingSubmitButton>
       {redirectHint ? <p className="text-xs text-muted-foreground">{redirectHint}</p> : null}
     </form>

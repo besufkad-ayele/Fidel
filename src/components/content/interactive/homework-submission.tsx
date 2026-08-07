@@ -11,8 +11,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { lessonMediaPublicUrl } from '@/lib/media/urls'
 import { ExternalLink, FileText, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 type Block = z.infer<typeof homeworkPromptBlockSchema>
+
+type FieldKey = 'text' | 'drive' | 'image' | 'pdf' | 'audio' | 'video'
 
 const DEFAULT_MAX_IMAGE = 1_048_576
 
@@ -50,6 +53,7 @@ export function HomeworkSubmission({
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
   const [submitNote, setSubmitNote] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(alreadySubmitted)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({})
 
   const maxImageBytes = block.maxImageBytes ?? DEFAULT_MAX_IMAGE
   const assignmentHref = useMemo(() => {
@@ -64,6 +68,7 @@ export function HomeworkSubmission({
   function onImagePick(file: File | undefined) {
     setImageError(null)
     setSubmitNote(null)
+    setFieldErrors((prev) => ({ ...prev, image: undefined }))
     if (!file) {
       setImageFile(null)
       if (imagePreview) URL.revokeObjectURL(imagePreview)
@@ -83,32 +88,74 @@ export function HomeworkSubmission({
     setImagePreview(URL.createObjectURL(file))
   }
 
-  function canSubmit() {
-    if (mode === 'preview') return false
-    if (!assignmentId) return false
-    if (pending) return false
-    const hasWriting =
-      (block.allowText && text.trim().length > 0) ||
-      (block.allowDriveLink && driveLink.trim().length > 0) ||
-      (block.allowImage && Boolean(imageFile)) ||
-      (block.allowFiles && pdfFiles.length > 0)
-    const hasAudio = block.allowAudio && (Boolean(audioBlob) || Boolean(audioFile))
-    const hasVideo = block.allowVideo && (Boolean(videoBlob) || Boolean(videoFile))
-    return hasWriting || hasAudio || hasVideo
+  function enabledAnswerPaths(): { key: FieldKey; label: string; filled: boolean }[] {
+    const paths: { key: FieldKey; label: string; filled: boolean }[] = []
+    if (block.allowText) {
+      paths.push({ key: 'text', label: 'Written response', filled: text.trim().length > 0 })
+    }
+    if (block.allowDriveLink) {
+      paths.push({ key: 'drive', label: 'Google Drive link', filled: driveLink.trim().length > 0 })
+    }
+    if (block.allowImage) {
+      paths.push({ key: 'image', label: 'Photo of your work', filled: Boolean(imageFile) })
+    }
+    if (block.allowFiles) {
+      paths.push({ key: 'pdf', label: 'PDF upload', filled: pdfFiles.length > 0 })
+    }
+    if (block.allowAudio) {
+      paths.push({
+        key: 'audio',
+        label: 'Audio recording or upload',
+        filled: Boolean(audioBlob) || Boolean(audioFile),
+      })
+    }
+    if (block.allowVideo) {
+      paths.push({
+        key: 'video',
+        label: 'Video recording or upload',
+        filled: Boolean(videoBlob) || Boolean(videoFile),
+      })
+    }
+    return paths
+  }
+
+  function hasAnyAnswer() {
+    return enabledAnswerPaths().some((p) => p.filled)
   }
 
   function handleSubmit() {
     if (!assignmentId) {
       setSubmitNote('This homework form is missing an assignment id.')
+      toast.error('This homework form is missing an assignment id.')
       return
     }
-    if (!canSubmit()) {
-      setSubmitNote('Add at least one answer: writing (Drive/image/text), audio, or video.')
+    if (mode === 'preview' || pending) return
+
+    const paths = enabledAnswerPaths()
+    if (paths.length === 0) {
+      const msg = 'No answer options are enabled for this homework.'
+      setSubmitNote(msg)
+      toast.error(msg)
+      return
+    }
+
+    if (!hasAnyAnswer()) {
+      const missing = paths.filter((p) => !p.filled)
+      const errors: Partial<Record<FieldKey, string>> = {}
+      for (const item of missing) {
+        errors[item.key] = `${item.label} is still empty`
+      }
+      setFieldErrors(errors)
+      setSubmitNote('Add at least one answer before submitting.')
+      toast.error('Complete the remaining items', {
+        description: missing.map((m) => `• ${m.label}`).join('\n'),
+      })
       return
     }
 
     startTransition(async () => {
       setSubmitNote(null)
+      setFieldErrors({})
       try {
         const formData = new FormData()
         formData.set('assignmentId', assignmentId)
@@ -146,6 +193,13 @@ export function HomeworkSubmission({
       }
     })
   }
+
+  const fieldShell = (key: FieldKey, className?: string) =>
+    cn(
+      'space-y-1.5 rounded-md transition-colors',
+      fieldErrors[key] && 'border border-danger-500 bg-danger-50/50 p-2 ring-1 ring-danger-500/20',
+      className,
+    )
 
   return (
     <div className="space-y-4 rounded-xl border border-gold-300 bg-gold-50 p-5">
@@ -213,7 +267,14 @@ export function HomeworkSubmission({
       ) : null}
 
       {(block.allowText || block.allowDriveLink || block.allowImage || block.allowFiles) && (
-        <div className="space-y-3 rounded-lg border border-cream-300 bg-white/70 p-3">
+        <div
+          className={cn(
+            'space-y-3 rounded-lg border bg-white/70 p-3',
+            fieldErrors.text || fieldErrors.drive || fieldErrors.image || fieldErrors.pdf
+              ? 'border-danger-500 ring-1 ring-danger-500/20'
+              : 'border-cream-300',
+          )}
+        >
           <p className="text-xs font-semibold tracking-wide text-gold-700 uppercase">
             Writing answer
           </p>
@@ -222,32 +283,46 @@ export function HomeworkSubmission({
           </p>
 
           {block.allowText ? (
-            <div className="space-y-1.5">
+            <div className={fieldShell('text')}>
               <label className="text-sm font-medium text-green-900">Written response</label>
               <Textarea
                 value={text}
                 disabled={mode === 'preview' || pending}
                 placeholder="Type your answer…"
-                onChange={(e) => setText(e.target.value)}
+                aria-invalid={Boolean(fieldErrors.text)}
+                onChange={(e) => {
+                  setText(e.target.value)
+                  setFieldErrors((prev) => ({ ...prev, text: undefined }))
+                }}
               />
+              {fieldErrors.text ? (
+                <p className="text-xs font-medium text-danger-600">{fieldErrors.text}</p>
+              ) : null}
             </div>
           ) : null}
 
           {block.allowDriveLink ? (
-            <div className="space-y-1.5">
+            <div className={fieldShell('drive')}>
               <label className="text-sm font-medium text-green-900">Google Drive link</label>
               <Input
                 type="url"
                 placeholder="https://drive.google.com/..."
                 value={driveLink}
                 disabled={mode === 'preview' || pending}
-                onChange={(e) => setDriveLink(e.target.value)}
+                aria-invalid={Boolean(fieldErrors.drive)}
+                onChange={(e) => {
+                  setDriveLink(e.target.value)
+                  setFieldErrors((prev) => ({ ...prev, drive: undefined }))
+                }}
               />
+              {fieldErrors.drive ? (
+                <p className="text-xs font-medium text-danger-600">{fieldErrors.drive}</p>
+              ) : null}
             </div>
           ) : null}
 
           {block.allowImage ? (
-            <div className="space-y-1.5">
+            <div className={fieldShell('image')}>
               <label className="inline-flex items-center gap-1.5 text-sm font-medium text-green-900">
                 <ImageIcon className="size-3.5" />
                 Photo of your work (max {formatBytes(maxImageBytes)})
@@ -256,9 +331,13 @@ export function HomeworkSubmission({
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 disabled={mode === 'preview' || pending}
+                aria-invalid={Boolean(fieldErrors.image)}
                 onChange={(e) => onImagePick(e.target.files?.[0])}
               />
               {imageError ? <p className="text-xs text-danger-500">{imageError}</p> : null}
+              {fieldErrors.image ? (
+                <p className="text-xs font-medium text-danger-600">{fieldErrors.image}</p>
+              ) : null}
               {imageFile ? (
                 <p className="text-xs text-green-700">
                   {imageFile.name} · {formatBytes(imageFile.size)}
@@ -276,15 +355,22 @@ export function HomeworkSubmission({
           ) : null}
 
           {block.allowFiles ? (
-            <div className="space-y-1.5">
+            <div className={fieldShell('pdf')}>
               <label className="text-sm font-medium text-green-900">PDF upload</label>
               <Input
                 type="file"
                 accept=".pdf,application/pdf"
                 multiple
                 disabled={mode === 'preview' || pending}
-                onChange={(e) => setPdfFiles(Array.from(e.target.files ?? []))}
+                aria-invalid={Boolean(fieldErrors.pdf)}
+                onChange={(e) => {
+                  setPdfFiles(Array.from(e.target.files ?? []))
+                  setFieldErrors((prev) => ({ ...prev, pdf: undefined }))
+                }}
               />
+              {fieldErrors.pdf ? (
+                <p className="text-xs font-medium text-danger-600">{fieldErrors.pdf}</p>
+              ) : null}
               {pdfFiles.length > 0 ? (
                 <ul className="space-y-1 text-xs text-green-700">
                   {pdfFiles.map((file) => (
@@ -300,14 +386,24 @@ export function HomeworkSubmission({
       )}
 
       {block.allowAudio ? (
-        <div className="space-y-3 rounded-lg border border-cream-300 bg-white/70 p-3">
+        <div
+          className={cn(
+            'space-y-3 rounded-lg border bg-white/70 p-3',
+            fieldErrors.audio ? 'border-danger-500 ring-1 ring-danger-500/20' : 'border-cream-300',
+          )}
+        >
           <p className="text-xs font-semibold tracking-wide text-gold-700 uppercase">Audio</p>
           <TimedRecorder
             kind="audio"
             prompt="Record your homework response"
             maxSeconds={block.maxAudioSeconds ?? 60}
             mode={mode}
-            onBlobReady={setAudioBlob}
+            invalid={Boolean(fieldErrors.audio)}
+            invalidMessage={fieldErrors.audio}
+            onBlobReady={(blob) => {
+              setAudioBlob(blob.size > 0 ? blob : null)
+              setFieldErrors((prev) => ({ ...prev, audio: undefined }))
+            }}
           />
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-green-900">Or upload an audio file</label>
@@ -315,7 +411,11 @@ export function HomeworkSubmission({
               type="file"
               accept="audio/*"
               disabled={mode === 'preview' || pending}
-              onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+              aria-invalid={Boolean(fieldErrors.audio)}
+              onChange={(e) => {
+                setAudioFile(e.target.files?.[0] ?? null)
+                setFieldErrors((prev) => ({ ...prev, audio: undefined }))
+              }}
             />
             {audioFile ? (
               <p className="text-xs text-green-700">
@@ -327,14 +427,24 @@ export function HomeworkSubmission({
       ) : null}
 
       {block.allowVideo ? (
-        <div className="space-y-3 rounded-lg border border-cream-300 bg-white/70 p-3">
+        <div
+          className={cn(
+            'space-y-3 rounded-lg border bg-white/70 p-3',
+            fieldErrors.video ? 'border-danger-500 ring-1 ring-danger-500/20' : 'border-cream-300',
+          )}
+        >
           <p className="text-xs font-semibold tracking-wide text-gold-700 uppercase">Video</p>
           <TimedRecorder
             kind="video"
             prompt="Record your video practice"
             maxSeconds={block.maxVideoSeconds ?? 90}
             mode={mode}
-            onBlobReady={setVideoBlob}
+            invalid={Boolean(fieldErrors.video)}
+            invalidMessage={fieldErrors.video}
+            onBlobReady={(blob) => {
+              setVideoBlob(blob.size > 0 ? blob : null)
+              setFieldErrors((prev) => ({ ...prev, video: undefined }))
+            }}
           />
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-green-900">Or upload a video file</label>
@@ -342,7 +452,11 @@ export function HomeworkSubmission({
               type="file"
               accept="video/*"
               disabled={mode === 'preview' || pending}
-              onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)}
+              aria-invalid={Boolean(fieldErrors.video)}
+              onChange={(e) => {
+                setVideoFile(e.target.files?.[0] ?? null)
+                setFieldErrors((prev) => ({ ...prev, video: undefined }))
+              }}
             />
             {videoFile ? (
               <p className="text-xs text-green-700">
@@ -361,13 +475,7 @@ export function HomeworkSubmission({
             Open this assignment from Homework to submit your answers.
           </p>
         ) : (
-          <Button
-            type="button"
-            size="sm"
-            disabled={!canSubmit()}
-            onClick={handleSubmit}
-            aria-busy={pending}
-          >
+          <Button type="button" size="sm" disabled={pending} onClick={handleSubmit} aria-busy={pending}>
             {pending ? 'Submitting…' : submitted ? 'Submit again' : 'Submit homework'}
           </Button>
         )}

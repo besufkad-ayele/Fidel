@@ -10,6 +10,20 @@ import { Button } from '@/components/ui/button'
 
 type Props = { params: Promise<{ id: string }> }
 
+type VocabOption = {
+  id: string
+  amharic: string
+  english: string
+  transliteration: string | null
+  exampleAmharic?: string | null
+  exampleEnglish?: string | null
+  audioSlow?: string | null
+  audioNormal?: string | null
+  audioNatural?: string | null
+  assignedToUnit?: boolean
+  units?: { id: string; title: string }[]
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
   const db = await createAdminDb()
@@ -29,33 +43,20 @@ export default async function HomeworkEditorPage({ params }: Props) {
 
   if (!assignment) notFound()
 
-  let vocabularyOptions: {
-    id: string
-    amharic: string
-    english: string
-    transliteration: string | null
-    exampleAmharic?: string | null
-    exampleEnglish?: string | null
-    audioSlow?: string | null
-    audioNormal?: string | null
-    audioNatural?: string | null
-    assignedToUnit?: boolean
-  }[] = []
+  let vocabularyOptions: VocabOption[] = []
+  let unitTitle: string | undefined
 
   if (assignment.unit_id) {
     const { data: unit } = await db
       .from('units')
-      .select('id, level_id')
+      .select('id, title, level_id')
       .eq('id', assignment.unit_id)
       .maybeSingle()
 
     if (unit) {
-      const [{ data: unitVocabLinks }, { data: levelVocabulary }] = await Promise.all([
-        db
-          .from('unit_vocabulary')
-          .select('vocabulary_id, sort_order')
-          .eq('unit_id', unit.id)
-          .order('sort_order'),
+      unitTitle = unit.title
+      const [{ data: levelUnits }, { data: levelVocabulary }] = await Promise.all([
+        db.from('units').select('id, title').eq('level_id', unit.level_id).order('sort_order'),
         db
           .from('vocabulary_items')
           .select(
@@ -66,9 +67,32 @@ export default async function HomeworkEditorPage({ params }: Props) {
           .limit(300),
       ])
 
-      const unitVocabIds = new Set(
-        (unitVocabLinks ?? []).map((l: { vocabulary_id: string }) => l.vocabulary_id),
+      const levelUnitIds = (levelUnits ?? []).map((u: { id: string }) => u.id)
+      const { data: allLinks } =
+        levelUnitIds.length > 0
+          ? await db
+              .from('unit_vocabulary')
+              .select('vocabulary_id, unit_id')
+              .in('unit_id', levelUnitIds)
+          : { data: [] as { vocabulary_id: string; unit_id: string }[] }
+
+      const unitTitleById = new Map(
+        (levelUnits ?? []).map((u: { id: string; title: string }) => [u.id, u.title]),
       )
+      const unitsByVocab = new Map<string, { id: string; title: string }[]>()
+      for (const row of allLinks ?? []) {
+        const title = unitTitleById.get(row.unit_id) ?? row.unit_id
+        const list = unitsByVocab.get(row.vocabulary_id) ?? []
+        list.push({ id: row.unit_id, title })
+        unitsByVocab.set(row.vocabulary_id, list)
+      }
+
+      const unitVocabIds = new Set(
+        (allLinks ?? [])
+          .filter((l: { unit_id: string }) => l.unit_id === unit.id)
+          .map((l: { vocabulary_id: string }) => l.vocabulary_id),
+      )
+
       const mapped = (levelVocabulary ?? []).map(
         (v: {
           id: string
@@ -91,11 +115,12 @@ export default async function HomeworkEditorPage({ params }: Props) {
           audioNormal: v.audio_normal_path ?? null,
           audioNatural: v.audio_natural_path ?? null,
           assignedToUnit: unitVocabIds.has(v.id),
+          units: unitsByVocab.get(v.id) ?? [],
         }),
       )
       vocabularyOptions = [
-        ...mapped.filter((v: { assignedToUnit: boolean }) => v.assignedToUnit),
-        ...mapped.filter((v: { assignedToUnit: boolean }) => !v.assignedToUnit),
+        ...mapped.filter((v) => v.assignedToUnit),
+        ...mapped.filter((v) => !v.assignedToUnit),
       ]
     }
   } else {
@@ -129,6 +154,7 @@ export default async function HomeworkEditorPage({ params }: Props) {
         audioNormal: v.audio_normal_path ?? null,
         audioNatural: v.audio_natural_path ?? null,
         assignedToUnit: false,
+        units: [],
       }),
     )
   }
@@ -147,6 +173,11 @@ export default async function HomeworkEditorPage({ params }: Props) {
                   href: `/admin/units/${assignment.unit_id}` as '/',
                   variant: 'outline' as const,
                 },
+                {
+                  label: 'Unit vocabulary',
+                  href: `/admin/units/${assignment.unit_id}/vocabulary` as '/',
+                  variant: 'outline' as const,
+                },
               ]
             : []),
         ]}
@@ -161,10 +192,12 @@ export default async function HomeworkEditorPage({ params }: Props) {
 
       <SectionCard
         title="Content studio"
-        description="Same component palette as Cultural insight, Language lesson, and Practice."
+        description="Flashcard vocabulary is grouped by unit."
       >
         <PartContentEditor
           assignmentId={assignment.id}
+          unitId={assignment.unit_id ?? undefined}
+          unitTitle={unitTitle}
           part="practice"
           initialContent={assignment.content ?? {}}
           initialStatus={assignment.status ?? 'draft'}

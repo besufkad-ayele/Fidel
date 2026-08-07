@@ -35,7 +35,7 @@ export default async function AdminHomeworkPage() {
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Homework"
-        description="Create homework with assignment link/file materials. Students can answer with audio/video uploads, a Drive link, or an image up to 1MB."
+        description="Create an assignment, then build it in the studio with blocks (writing form, voice, video, ID card, and more)."
         actions={[
           { label: 'Assess submissions', href: '/admin/homework/assess' },
         ]}
@@ -76,28 +76,13 @@ export default async function AdminHomeworkPage() {
               <input type="checkbox" name="isUnitDefault" />
               Unit default template (requires a unit)
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="allowAudio" defaultChecked />
-              Allow audio (record / upload)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="allowVideo" defaultChecked />
-              Allow video (record / upload)
-            </label>
             <p className="text-xs text-muted-foreground">
-              After create, open the studio to attach an assignment link/file and enable writing
-              via Drive link or image (max 1MB).
+              After create, open the studio and add the blocks students should complete (Homework
+              writing form, Voice recording, Video recording, ID card, etc.).
             </p>
-            <div>
-              <Label htmlFor="maxAudioSeconds">Max audio seconds</Label>
-              <Input
-                id="maxAudioSeconds"
-                name="maxAudioSeconds"
-                type="number"
-                defaultValue={60}
-                className="mt-1.5"
-              />
-            </div>
+            <input type="hidden" name="allowAudio" value="" />
+            <input type="hidden" name="allowVideo" value="" />
+            <input type="hidden" name="maxAudioSeconds" value="60" />
             <Button type="submit" className="w-full">
               Create & open studio
             </Button>
@@ -134,9 +119,7 @@ export default async function AdminHomeworkPage() {
                     </div>
                     <p className="text-sm text-green-800 line-clamp-3">{a.instructions}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {a.unit_id ?? 'No unit'}
-                      {a.allow_audio ? ` · audio ≤ ${a.max_audio_seconds ?? 60}s` : ''}
-                      {a.allow_video ? ' · video' : ''}
+                      {a.unit_id ? 'Linked to a unit' : 'No unit'}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button asChild size="sm">

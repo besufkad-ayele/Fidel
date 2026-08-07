@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Mic, Square, Video } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type TimedRecorderProps = {
   kind: 'audio' | 'video'
@@ -14,7 +15,12 @@ type TimedRecorderProps = {
   mode?: 'student' | 'preview'
   /** Override the eyebrow label (defaults to Speaking / Video practice) */
   label?: string
+  /** Highlight the recorder when submit validation fails */
+  invalid?: boolean
+  invalidMessage?: string | null
   onBlobReady?: (blob: Blob) => void
+  /** Notify parent of recorded length (seconds) when a take finishes */
+  onDurationReady?: (seconds: number) => void
 }
 
 export function TimedRecorder({
@@ -26,7 +32,10 @@ export function TimedRecorder({
   required,
   mode = 'student',
   label,
+  invalid = false,
+  invalidMessage,
   onBlobReady,
+  onDurationReady,
 }: TimedRecorderProps) {
   const [recording, setRecording] = useState(false)
   const [seconds, setSeconds] = useState(0)
@@ -36,6 +45,11 @@ export function TimedRecorder({
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const secondsRef = useRef(0)
+
+  useEffect(() => {
+    secondsRef.current = seconds
+  }, [seconds])
 
   useEffect(() => {
     return () => {
@@ -50,13 +64,16 @@ export function TimedRecorder({
     if (mode === 'preview') {
       setRecording(true)
       setSeconds(0)
+      secondsRef.current = 0
       timerRef.current = setInterval(() => {
         setSeconds((s) => {
-          if (s + 1 >= maxSeconds) {
+          const next = s + 1
+          secondsRef.current = next
+          if (next >= maxSeconds) {
             stopPreview()
             return maxSeconds
           }
-          return s + 1
+          return next
         })
       }, 1000)
       return
@@ -80,19 +97,23 @@ export function TimedRecorder({
         const objectUrl = URL.createObjectURL(blob)
         setUrl(objectUrl)
         onBlobReady?.(blob)
+        onDurationReady?.(secondsRef.current)
         stream.getTracks().forEach((t) => t.stop())
       }
       mediaRef.current = recorder
       recorder.start()
       setRecording(true)
       setSeconds(0)
+      secondsRef.current = 0
       timerRef.current = setInterval(() => {
         setSeconds((s) => {
-          if (s + 1 >= maxSeconds) {
+          const next = s + 1
+          secondsRef.current = next
+          if (next >= maxSeconds) {
             stop()
             return maxSeconds
           }
-          return s + 1
+          return next
         })
       }, 1000)
     } catch {
@@ -115,11 +136,24 @@ export function TimedRecorder({
   }
 
   const remaining = Math.max(0, maxSeconds - seconds)
-  const tooShort = seconds > 0 && seconds < minSeconds
+  const tooShort = seconds > 0 && seconds < minSeconds && Boolean(url)
+  const showInvalid = invalid || tooShort
 
   return (
-    <div className="space-y-3 rounded-xl border border-cream-300 bg-cream-50 p-5">
-      <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-gold-700 uppercase">
+    <div
+      className={cn(
+        'space-y-3 rounded-xl border bg-cream-50 p-5 transition-colors',
+        showInvalid
+          ? 'border-danger-500 bg-danger-50/40 ring-1 ring-danger-500/30'
+          : 'border-cream-300',
+      )}
+    >
+      <div
+        className={cn(
+          'flex items-center gap-2 text-xs font-semibold tracking-[0.14em] uppercase',
+          showInvalid ? 'text-danger-600' : 'text-gold-700',
+        )}
+      >
         {kind === 'audio' ? <Mic className="size-3.5" /> : <Video className="size-3.5" />}
         {label ?? (kind === 'audio' ? 'Speaking' : 'Video practice')}
         {required ? ' · required' : ''}
@@ -127,11 +161,18 @@ export function TimedRecorder({
       <p className="font-medium text-green-900">{prompt}</p>
       {instructions ? <p className="text-sm text-green-700">{instructions}</p> : null}
 
-      <div className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-sm ring-1 ring-cream-300">
+      <div
+        className={cn(
+          'flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-sm ring-1',
+          showInvalid ? 'ring-danger-500/40' : 'ring-cream-300',
+        )}
+      >
         <span className="tabular-nums text-green-900">
           {seconds}s / {maxSeconds}s
         </span>
-        <span className="text-green-600">{remaining}s left</span>
+        <span className={showInvalid ? 'text-danger-600' : 'text-green-600'}>
+          {remaining}s left
+        </span>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -152,7 +193,9 @@ export function TimedRecorder({
             onClick={() => {
               setUrl(null)
               setSeconds(0)
+              secondsRef.current = 0
               onBlobReady?.(new Blob())
+              onDurationReady?.(0)
             }}
           >
             Re-record
@@ -162,6 +205,9 @@ export function TimedRecorder({
 
       {tooShort && !recording ? (
         <p className="text-xs text-danger-600">Minimum length is {minSeconds}s.</p>
+      ) : null}
+      {invalid && invalidMessage ? (
+        <p className="text-xs font-medium text-danger-600">{invalidMessage}</p>
       ) : null}
       {error ? <p className="text-xs text-danger-600">{error}</p> : null}
       {mode === 'preview' ? (

@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmForm } from '@/components/admin/confirm-form'
+import { VocabularyLinkPicker } from '@/components/admin/vocabulary-link-picker'
 import {
   BLOCK_CATALOG,
   createBlock,
@@ -74,10 +75,13 @@ type VocabOption = {
   audioNormal?: string | null
   audioNatural?: string | null
   assignedToUnit?: boolean
+  units?: { id: string; title: string }[]
 }
 
 type PartContentEditorProps = {
   unitId?: string
+  /** Display title for unit-grouped vocab picker */
+  unitTitle?: string
   part?: LessonPartKey
   partSlug?: string
   /** When set, editor saves to homework_assignments instead of lesson_parts. */
@@ -622,7 +626,10 @@ function SortableBlock({
         transition,
       }}
       className={cn(
-        'rounded-xl border border-cream-300 bg-white shadow-sm',
+        'rounded-xl border bg-white shadow-sm',
+        block.type === 'homework_prompt'
+          ? 'border-gold-400 ring-1 ring-gold-300/60'
+          : 'border-cream-300',
         isDragging && 'opacity-80 ring-2 ring-gold-400',
       )}
     >
@@ -634,7 +641,13 @@ function SortableBlock({
           {...listeners}
         >
           <GripVertical className="size-4 text-green-500" />
-          {block.type.replaceAll('_', ' ')}
+          {block.type === 'homework_prompt'
+            ? 'Student submission form'
+            : block.type === 'listen_grid' && 'activityMode' in block
+              ? block.activityMode === 'mark_understood'
+                ? 'Listen & mark'
+                : 'Listen & write'
+              : block.type.replaceAll('_', ' ')}
           {block.type === 'table' && 'variant' in block
             ? block.variant === 'multi_row'
               ? ' · fillable'
@@ -682,8 +695,26 @@ function SortableBlock({
               ))}
             </select>
           ) : null}
-          <Button type="button" size="sm" variant="ghost" onClick={onRemove}>
+          <Button
+            type="button"
+            size="sm"
+            variant={block.type === 'homework_prompt' ? 'outline' : 'ghost'}
+            onClick={onRemove}
+            aria-label={
+              block.type === 'homework_prompt'
+                ? 'Delete student submission form'
+                : 'Remove block'
+            }
+            className={
+              block.type === 'homework_prompt'
+                ? 'border-danger-500 text-danger-600 hover:bg-danger-50'
+                : undefined
+            }
+          >
             <Trash2 className="size-3.5" />
+            {block.type === 'homework_prompt' ? (
+              <span className="ml-1 hidden sm:inline">Delete form</span>
+            ) : null}
           </Button>
         </div>
       </div>
@@ -1451,13 +1482,13 @@ function createSharedTemplateBlocks(kind: 'lesson' | 'practice'): ContentBlock[]
       ...homework,
       title: 'Homework submission',
       instructions:
-        'Use the assignment link or file. For writing, paste a Drive link or upload a photo (max 1MB). Audio/video: record or upload.',
+        'Use the assignment link or file. For writing, paste a Drive link or upload a photo. Add Voice/Video recording blocks for spoken answers.',
       assignmentLink: '',
       assignmentFileUrl: '',
       assignmentFileName: '',
       allowText: true,
-      allowAudio: true,
-      allowVideo: true,
+      allowAudio: false,
+      allowVideo: false,
       allowFiles: false,
       allowDriveLink: true,
       allowImage: true,
@@ -1483,10 +1514,14 @@ function createLessonTemplateBlocks(): ContentBlock[] {
 function BlockFields({
   block,
   vocabularyOptions,
+  currentUnitId,
+  currentUnitTitle,
   onChange,
 }: {
   block: ContentBlock
   vocabularyOptions: VocabOption[]
+  currentUnitId?: string
+  currentUnitTitle?: string
   onChange: (next: ContentBlock) => void
 }) {
   switch (block.type) {
@@ -2272,7 +2307,9 @@ function BlockFields({
           </div>
         </div>
       )
-    case 'listen_grid':
+    case 'listen_grid': {
+      const activityMode = block.activityMode ?? 'write'
+      const isMarkMode = activityMode === 'mark_understood'
       return (
         <div className="space-y-3">
           <div>
@@ -2290,8 +2327,42 @@ function BlockFields({
               className="mt-1.5"
               value={block.prompt ?? ''}
               onChange={(e) => onChange({ ...block, prompt: e.target.value })}
-              placeholder="Listen and repeat. Write each form below."
+              placeholder={
+                isMarkMode
+                  ? 'Hover each cell to listen. When you understand, press I understand.'
+                  : 'Listen and repeat. Write each form below.'
+              }
             />
+          </div>
+          <div>
+            <Label>Activity</Label>
+            <select
+              className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={activityMode}
+              onChange={(e) => {
+                const next = e.target.value as 'write' | 'mark_understood'
+                onChange({
+                  ...block,
+                  activityMode: next,
+                  allowWrite: next === 'write' ? (block.allowWrite ?? true) : false,
+                  ...(next === 'mark_understood'
+                    ? {
+                        prompt:
+                          block.prompt?.trim() ||
+                          'Hover each cell to listen. When you understand, press I understand.',
+                      }
+                    : {}),
+                })
+              }}
+            >
+              <option value="write">Listen &amp; write</option>
+              <option value="mark_understood">Listen &amp; mark</option>
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isMarkMode
+                ? 'Students hover a cell (number, word, or image) to hear only that cell’s uploaded audio, then press one “I understand” button.'
+                : 'Students play cell audio and write number, word, or image answers below.'}
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -2310,24 +2381,26 @@ function BlockFields({
                 }
               />
             </div>
-            <div>
-              <Label>Student writes</Label>
-              <select
-                className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={block.answerFormat ?? 'word'}
-                disabled={!(block.allowWrite ?? true)}
-                onChange={(e) =>
-                  onChange({
-                    ...block,
-                    answerFormat: e.target.value as 'number' | 'word' | 'image',
-                  })
-                }
-              >
-                <option value="number">Number</option>
-                <option value="word">Word</option>
-                <option value="image">Image upload</option>
-              </select>
-            </div>
+            {!isMarkMode ? (
+              <div>
+                <Label>Student writes</Label>
+                <select
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={block.answerFormat ?? 'word'}
+                  disabled={!(block.allowWrite ?? true)}
+                  onChange={(e) =>
+                    onChange({
+                      ...block,
+                      answerFormat: e.target.value as 'number' | 'word' | 'image',
+                    })
+                  }
+                >
+                  <option value="number">Number</option>
+                  <option value="word">Word</option>
+                  <option value="image">Image upload</option>
+                </select>
+              </div>
+            ) : null}
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -2335,16 +2408,20 @@ function BlockFields({
               checked={block.allowListen ?? true}
               onChange={(e) => onChange({ ...block, allowListen: e.target.checked })}
             />
-            Enable model listen for students (play buttons when audio is uploaded — no TTS)
+            {isMarkMode
+              ? 'Enable listen (hover/tap plays uploaded cell audio — no TTS)'
+              : 'Enable model listen for students (play buttons when audio is uploaded — no TTS)'}
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={block.allowWrite ?? true}
-              onChange={(e) => onChange({ ...block, allowWrite: e.target.checked })}
-            />
-            Enable write answers (optional for practice — off = listen only)
-          </label>
+          {!isMarkMode ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={block.allowWrite ?? true}
+                onChange={(e) => onChange({ ...block, allowWrite: e.target.checked })}
+              />
+              Enable write answers (optional for practice — off = listen only)
+            </label>
+          ) : null}
           <div className="space-y-2">
             <Label>Grid cells</Label>
             {block.items.map((item, i) => (
@@ -2420,7 +2497,11 @@ function BlockFields({
                 />
                 <AdminAudioField
                   name={`listen-grid-audio-${item.id}`}
-                  label="Cell audio (optional — otherwise TTS)"
+                  label={
+                    isMarkMode
+                      ? 'Cell audio (required for hover-to-play)'
+                      : 'Cell audio (optional — play button when set)'
+                  }
                   folder="lesson"
                   levelId="ha"
                   clipLabel={`grid-${i + 1}`}
@@ -2484,6 +2565,7 @@ function BlockFields({
           </div>
         </div>
       )
+    }
     case 'audio_match':
       return (
         <div className="space-y-3">
@@ -3781,54 +3863,13 @@ function BlockFields({
               />
             </div>
           ) : null}
-          <div>
-            <Label>Link vocabulary</Label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Unit-assigned words appear first. Manage assignments on the unit vocabulary page.
-            </p>
-            <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto rounded-md border border-cream-300 p-2">
-              {vocabularyOptions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No vocabulary yet. Create or assign words for this unit first.
-                </p>
-              ) : (
-                vocabularyOptions.map((v) => {
-                  const checked = block.vocabularyIds.includes(v.id)
-                  const hasAudio = Boolean(v.audioSlow || v.audioNormal || v.audioNatural)
-                  return (
-                    <label key={v.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          const vocabularyIds = checked
-                            ? block.vocabularyIds.filter((id) => id !== v.id)
-                            : [...block.vocabularyIds, v.id]
-                          onChange({ ...block, vocabularyIds })
-                        }}
-                      />
-                      <span className="font-ethiopic">{v.amharic}</span>
-                      <span className="text-muted-foreground">— {v.english}</span>
-                      {v.assignedToUnit ? (
-                        <span className="rounded bg-green-100 px-1 text-[10px] font-semibold text-green-800 uppercase">
-                          unit
-                        </span>
-                      ) : (
-                        <span className="rounded bg-cream-200 px-1 text-[10px] font-semibold text-muted-foreground uppercase">
-                          level
-                        </span>
-                      )}
-                      {hasAudio ? (
-                        <span className="rounded bg-gold-100 px-1 text-[10px] font-semibold text-gold-800 uppercase">
-                          audio
-                        </span>
-                      ) : null}
-                    </label>
-                  )
-                })
-              )}
-            </div>
-          </div>
+          <VocabularyLinkPicker
+            options={vocabularyOptions}
+            selectedIds={block.vocabularyIds}
+            currentUnitId={currentUnitId}
+            currentUnitTitle={currentUnitTitle}
+            onChange={(vocabularyIds) => onChange({ ...block, vocabularyIds })}
+          />
           {block.type === 'flashcard_revision' ? (
             <div>
               <Label>Custom cards (front | back | optional audio URL)</Label>
@@ -4193,6 +4234,11 @@ function BlockFields({
     case 'homework_prompt':
       return (
         <>
+          <p className="rounded-lg border border-gold-300 bg-gold-50 px-3 py-2 text-xs text-green-800">
+            Writing / materials form (Drive link, photo, text). For voice or video, add a{' '}
+            <strong>Voice recording</strong> or <strong>Video recording</strong> block instead —
+            do not use toggles here.
+          </p>
           <div>
             <Label>Title</Label>
             <Input
@@ -4236,67 +4282,6 @@ function BlockFields({
               }
             />
           </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(
-              [
-                ['allowText', 'Allow text answer'],
-                ['allowAudio', 'Allow audio (record / upload)'],
-                ['allowVideo', 'Allow video (record / upload)'],
-                ['allowDriveLink', 'Writing: Drive link'],
-                ['allowImage', 'Writing: image ≤1MB'],
-                ['allowFiles', 'Allow PDF upload (student)'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={block[key]}
-                  onChange={(e) => onChange({ ...block, [key]: e.target.checked })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <Label>Max audio seconds</Label>
-              <Input
-                type="number"
-                className="mt-1.5"
-                value={block.maxAudioSeconds ?? 60}
-                onChange={(e) =>
-                  onChange({ ...block, maxAudioSeconds: Number(e.target.value) || 60 })
-                }
-              />
-            </div>
-            <div>
-              <Label>Max video seconds</Label>
-              <Input
-                type="number"
-                className="mt-1.5"
-                value={block.maxVideoSeconds ?? 90}
-                onChange={(e) =>
-                  onChange({ ...block, maxVideoSeconds: Number(e.target.value) || 90 })
-                }
-              />
-            </div>
-            <div>
-              <Label>Max image (bytes)</Label>
-              <Input
-                type="number"
-                className="mt-1.5"
-                value={block.maxImageBytes ?? 1_048_576}
-                onChange={(e) =>
-                  onChange({
-                    ...block,
-                    maxImageBytes: Number(e.target.value) || 1_048_576,
-                  })
-                }
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">Default 1048576 = 1MB</p>
-            </div>
-          </div>
         </>
       )
     case 'divider':
@@ -4308,6 +4293,7 @@ function BlockFields({
 
 export function PartContentEditor({
   unitId,
+  unitTitle,
   part: partProp,
   partSlug,
   assignmentId,
@@ -4361,7 +4347,11 @@ export function PartContentEditor({
   function blockMatchesSearch(block: ContentBlock) {
     if (!blockQueryNormalized) return true
     const catalogLabel =
-      BLOCK_CATALOG.find((c) => c.type === block.type)?.label ?? block.type
+      block.type === 'listen_grid' && 'activityMode' in block
+        ? block.activityMode === 'mark_understood'
+          ? 'Listen & mark'
+          : 'Listen & write'
+        : (BLOCK_CATALOG.find((c) => c.type === block.type)?.label ?? block.type)
     const bits: string[] = [block.type, catalogLabel]
     if ('title' in block && typeof block.title === 'string') bits.push(block.title)
     if ('prompt' in block && typeof block.prompt === 'string') bits.push(block.prompt)
@@ -4548,6 +4538,35 @@ export function PartContentEditor({
         ) : null}
       </div>
 
+      {isHomework && doc.blocks.some((b) => b.type === 'homework_prompt') ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-gold-400 bg-gold-50 px-4 py-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-semibold text-green-900">
+              Student submission form is in this homework
+            </p>
+            <p className="text-xs text-green-800">
+              That block adds the Drive / text / image / audio form students see below your
+              speaking task. Delete it here if you only want the voice assignment.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-danger-500 text-danger-600 hover:bg-danger-50"
+            onClick={() =>
+              setDoc((prev) => ({
+                ...prev,
+                blocks: prev.blocks.filter((b) => b.type !== 'homework_prompt'),
+              }))
+            }
+          >
+            <Trash2 className="mr-1.5 size-3.5" />
+            Delete submission form
+          </Button>
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -4570,15 +4589,19 @@ export function PartContentEditor({
                   size="sm"
                   variant="ghost"
                   onClick={() =>
-                    setDoc((prev) => ({
-                      ...prev,
-                      blocks: [
-                        ...prev.blocks,
-                        ...createSharedTemplateBlocks(
-                          prev.part === 'practice' ? 'practice' : 'lesson',
-                        ),
-                      ],
-                    }))
+                    setDoc((prev) => {
+                      const template = createSharedTemplateBlocks(
+                        prev.part === 'practice' ? 'practice' : 'lesson',
+                      )
+                      // Homework studios: don't auto-add the submission form block.
+                      const blocks = isHomework
+                        ? template.filter((b) => b.type !== 'homework_prompt')
+                        : template
+                      return {
+                        ...prev,
+                        blocks: [...prev.blocks, ...blocks],
+                      }
+                    })
                   }
                 >
                   Add full template
@@ -4730,6 +4753,8 @@ export function PartContentEditor({
                   <BlockFields
                     block={block}
                     vocabularyOptions={vocabularyOptions}
+                    currentUnitId={unitId}
+                    currentUnitTitle={unitTitle}
                     onChange={(next) =>
                       setDoc((prev) => ({
                         ...prev,
@@ -4869,7 +4894,7 @@ export function PartContentEditor({
                                 ) : (
                                   filteredCatalog.map((item, i) => (
                                     <button
-                                      key={`${item.type}-${item.createOptions?.tableVariant ?? 'default'}-${i}`}
+                                      key={`${item.type}-${item.createOptions?.tableVariant ?? item.createOptions?.activityMode ?? 'default'}-${i}`}
                                       type="button"
                                       className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-left hover:border-gold-400"
                                       onClick={() => {
@@ -4927,11 +4952,17 @@ export function PartContentEditor({
             <ConfirmForm
               action={async () => {
                 await resetHomeworkContentAction(assignmentId)
-                setDoc(createEmptyPartContent('practice'))
+                setDoc({
+                  part: 'practice',
+                  version: 1,
+                  title: doc.title || 'Homework',
+                  categories: [],
+                  blocks: [],
+                })
                 setStatus('draft')
                 router.refresh()
               }}
-              message="Reset this homework to the starter template?"
+              message="Clear all blocks from this homework?"
               label="Reset content"
               variant="outline"
             />

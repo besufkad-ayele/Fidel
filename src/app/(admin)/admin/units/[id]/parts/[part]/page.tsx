@@ -49,13 +49,9 @@ export default async function PartEditorPage({ params }: Props) {
     .maybeSingle()
   if (!unit) notFound()
 
-  const [{ data: part }, { data: unitVocabLinks }, { data: levelVocabulary }] = await Promise.all([
+  const [{ data: part }, { data: levelUnits }, { data: levelVocabulary }] = await Promise.all([
     db.from('lesson_parts').select('*').eq('unit_id', id).eq('part', partKey).maybeSingle(),
-    db
-      .from('unit_vocabulary')
-      .select('vocabulary_id, sort_order')
-      .eq('unit_id', id)
-      .order('sort_order'),
+    db.from('units').select('id, title').eq('level_id', unit.level_id).order('sort_order'),
     db
       .from('vocabulary_items')
       .select(
@@ -66,9 +62,32 @@ export default async function PartEditorPage({ params }: Props) {
       .limit(300),
   ])
 
-  const unitVocabIds = new Set(
-    (unitVocabLinks ?? []).map((l: { vocabulary_id: string }) => l.vocabulary_id),
+  const levelUnitIds = (levelUnits ?? []).map((u: { id: string }) => u.id)
+  const { data: allLinks } =
+    levelUnitIds.length > 0
+      ? await db
+          .from('unit_vocabulary')
+          .select('vocabulary_id, unit_id, sort_order')
+          .in('unit_id', levelUnitIds)
+      : { data: [] as { vocabulary_id: string; unit_id: string; sort_order: number }[] }
+
+  const unitTitleById = new Map(
+    (levelUnits ?? []).map((u: { id: string; title: string }) => [u.id, u.title]),
   )
+  const unitsByVocab = new Map<string, { id: string; title: string }[]>()
+  for (const row of allLinks ?? []) {
+    const title = unitTitleById.get(row.unit_id) ?? row.unit_id
+    const list = unitsByVocab.get(row.vocabulary_id) ?? []
+    list.push({ id: row.unit_id, title })
+    unitsByVocab.set(row.vocabulary_id, list)
+  }
+
+  const unitVocabIds = new Set(
+    (allLinks ?? [])
+      .filter((l: { unit_id: string }) => l.unit_id === id)
+      .map((l: { vocabulary_id: string }) => l.vocabulary_id),
+  )
+
   const mappedVocab = (levelVocabulary ?? []).map(
     (v: {
       id: string
@@ -91,10 +110,10 @@ export default async function PartEditorPage({ params }: Props) {
       audioNormal: v.audio_normal_path ?? null,
       audioNatural: v.audio_natural_path ?? null,
       assignedToUnit: unitVocabIds.has(v.id),
+      units: unitsByVocab.get(v.id) ?? [],
     }),
   )
 
-  // Prefer unit-assigned words first for linking in the editor
   const vocabularyOptions = [
     ...mappedVocab.filter((v: { assignedToUnit: boolean }) => v.assignedToUnit),
     ...mappedVocab.filter((v: { assignedToUnit: boolean }) => !v.assignedToUnit),
@@ -120,10 +139,11 @@ export default async function PartEditorPage({ params }: Props) {
 
       <SectionCard
         title="Content studio"
-        description="Drag blocks to reorder. Vocabulary pickers list this unit’s words first."
+        description="Flashcard and vocabulary blocks pick words grouped by unit."
       >
         <PartContentEditor
           unitId={id}
+          unitTitle={unit.title}
           part={partKey}
           partSlug={partSlug}
           initialContent={part?.content ?? {}}
