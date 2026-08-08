@@ -313,6 +313,18 @@ export const listenGridBlockSchema = blockBase.extend({
         imageUrl: optionalUrl,
         /** Optional expected answer for self-check */
         answer: z.string().optional(),
+        /**
+         * Listen & mark reference (teacher-provided, always visible): the reading in the
+         * original language / script — e.g. the Amharic word form of a number (ሁለት).
+         */
+        originalReading: z.string().optional(),
+        /**
+         * Listen & mark reference (teacher-provided, always visible to students):
+         * how the label reads — transliteration / English reading.
+         */
+        transcription: z.string().optional(),
+        /** Listen & mark reference (teacher-provided, always visible): English meaning. */
+        translation: z.string().optional(),
       }),
     )
     .min(1),
@@ -615,6 +627,13 @@ export const speakingTaskBlockSchema = blockBase.extend({
   instructions: z.string().optional(),
   maxSeconds: z.number().int().min(5).max(600).default(60),
   minSeconds: z.number().int().min(0).max(600).default(0),
+  /**
+   * Student text blanks shown with the recorder
+   * (Amharic word, English reading / transliteration, English translation).
+   */
+  showAmharic: z.boolean().default(true),
+  showReading: z.boolean().default(true),
+  showTranslation: z.boolean().default(true),
 })
 
 export const videoPracticeBlockSchema = blockBase.extend({
@@ -951,6 +970,9 @@ const STARTER_BLOCKS: Record<LessonPartKey, ContentBlock[]> = {
       instructions: 'Speak clearly. You may re-record and try again.',
       maxSeconds: 60,
       minSeconds: 5,
+      showAmharic: true,
+      showReading: true,
+      showTranslation: true,
     },
     {
       id: 'video',
@@ -1187,7 +1209,13 @@ export const BLOCK_CATALOG: {
   { type: 'multiple_choice', label: 'Multiple choice', description: 'Quiz-style question', parts: 'all' },
   { type: 'matching_cards', label: 'Matching cards', description: 'Pair matching exercise', parts: 'all' },
   { type: 'comprehension_check', label: 'Comprehension check', description: 'Quick check question', parts: 'all' },
-  { type: 'speaking_task', label: 'Voice recording', description: 'Student records themselves speaking (practice or homework)', parts: 'all' },
+  {
+    type: 'speaking_task',
+    label: 'Voice recording',
+    description:
+      'Write Amharic word, English reading, and English translation, then record speaking',
+    parts: 'all',
+  },
   { type: 'video_practice', label: 'Video recording', description: 'Student records themselves on camera (practice or homework)', parts: 'all' },
   {
     type: 'homework_prompt',
@@ -1200,6 +1228,108 @@ export const BLOCK_CATALOG: {
   { type: 'dos_donts', label: "Do's & don'ts", description: 'Guidance list', parts: 'all' },
   { type: 'why_matters', label: 'Why it matters', description: 'Persona-framed framing', parts: 'all' },
 ]
+
+/**
+ * Number → words helpers used to auto-fill the Listen & mark numbers template.
+ * Best-effort Amharic word forms + transliteration; teachers can edit any cell.
+ */
+const AM_ONES = ['', 'አንድ', 'ሁለት', 'ሶስት', 'አራት', 'አምስት', 'ስድስት', 'ሰባት', 'ስምንት', 'ዘጠኝ']
+const TR_ONES = ['', 'and', 'hulet', 'sost', 'arat', 'amist', 'sidist', 'sebat', 'simint', 'zeteny']
+const AM_TENS = ['', 'አስር', 'ሃያ', 'ሰላሳ', 'አርባ', 'ሃምሳ', 'ስድሳ', 'ሰባ', 'ሰማንያ', 'ዘጠና']
+const TR_TENS = ['', 'asir', 'haya', 'selasa', 'arba', 'hamsa', 'sidsa', 'seba', 'semanya', 'zetena']
+
+/** Amharic + transliteration for 1–99. */
+function amTwo(n: number): [string, string] {
+  if (n <= 0) return ['', '']
+  if (n < 10) return [AM_ONES[n], TR_ONES[n]]
+  if (n === 10) return ['አስር', 'asir']
+  if (n < 20) {
+    const u = n - 10
+    return [`አስራ ${AM_ONES[u]}`, `asra ${TR_ONES[u]}`]
+  }
+  const tens = Math.floor(n / 10)
+  const u = n % 10
+  if (u === 0) return [AM_TENS[tens], TR_TENS[tens]]
+  return [`${AM_TENS[tens]} ${AM_ONES[u]}`, `${TR_TENS[tens]} ${TR_ONES[u]}`]
+}
+
+/** Amharic + transliteration for 1–999. */
+function amThree(n: number): [string, string] {
+  const h = Math.floor(n / 100)
+  const rest = n % 100
+  if (h === 0) return amTwo(rest)
+  const [ham, htr] = h === 1 ? ['መቶ', 'meto'] : [`${AM_ONES[h]} መቶ`, `${TR_ONES[h]} meto`]
+  if (rest === 0) return [ham, htr]
+  const [ram, rtr] = amTwo(rest)
+  return [`${ham} ${ram}`, `${htr} ${rtr}`]
+}
+
+/** Amharic + transliteration up to millions. */
+function toAmharic(n: number): [string, string] {
+  if (n === 0) return ['ዜሮ', 'ziro']
+  const million = Math.floor(n / 1_000_000)
+  const afterMillion = n % 1_000_000
+  const thousand = Math.floor(afterMillion / 1000)
+  const rest = afterMillion % 1000
+
+  const parts: string[] = []
+  const trParts: string[] = []
+  if (million > 0) {
+    const [am, tr] = amThree(million)
+    parts.push(`${am} ሚሊዮን`)
+    trParts.push(`${tr} miliyon`)
+  }
+  if (thousand > 0) {
+    if (thousand === 1) {
+      parts.push('ሺ')
+      trParts.push('shi')
+    } else {
+      const [am, tr] = amThree(thousand)
+      parts.push(`${am} ሺ`)
+      trParts.push(`${tr} shi`)
+    }
+  }
+  if (rest > 0) {
+    const [am, tr] = amThree(rest)
+    parts.push(am)
+    trParts.push(tr)
+  }
+  return [parts.join(' '), trParts.join(' ')]
+}
+
+const EN_ONES = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+  'seventeen', 'eighteen', 'nineteen',
+]
+const EN_TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+
+function enUnderThousand(n: number): string {
+  if (n < 20) return EN_ONES[n]
+  if (n < 100) {
+    const t = Math.floor(n / 10)
+    const u = n % 10
+    return u === 0 ? EN_TENS[t] : `${EN_TENS[t]}-${EN_ONES[u]}`
+  }
+  const h = Math.floor(n / 100)
+  const rest = n % 100
+  return rest === 0 ? `${EN_ONES[h]} hundred` : `${EN_ONES[h]} hundred ${enUnderThousand(rest)}`
+}
+
+/** English words up to millions. */
+function toEnglishWords(n: number): string {
+  if (n === 0) return 'zero'
+  const million = Math.floor(n / 1_000_000)
+  const afterMillion = n % 1_000_000
+  const thousand = Math.floor(afterMillion / 1000)
+  const rest = afterMillion % 1000
+
+  const parts: string[] = []
+  if (million > 0) parts.push(`${enUnderThousand(million)} million`)
+  if (thousand > 0) parts.push(`${enUnderThousand(thousand)} thousand`)
+  if (rest > 0) parts.push(enUnderThousand(rest))
+  return parts.join(' ')
+}
 
 export function createBlock(
   type: ContentBlockType,
@@ -1313,6 +1443,8 @@ export function createBlock(
       const numbers = [
         ...Array.from({ length: 30 }, (_, i) => i + 1),
         40, 50, 60, 70, 80, 90, 100,
+        // Beyond 100 — practice larger forms
+        104, 129, 999, 1000, 1100, 2500, 10_000, 25_000, 100_000, 250_000, 500_000, 1_000_000,
       ]
       const activityMode = options?.activityMode ?? 'write'
       const isMark = activityMode === 'mark_understood'
@@ -1328,16 +1460,22 @@ export function createBlock(
         answerFormat: 'word',
         allowListen: true,
         allowWrite: !isMark,
-        items: numbers.map((n) => ({
-          id: crypto.randomUUID(),
-          display: 'number' as const,
-          label: String(n),
-          emphasize: n % 10 === 0,
-          audioUrl: '',
-          speakText: String(n),
-          imageUrl: '',
-          answer: '',
-        })),
+        items: numbers.map((n) => {
+          const [amReading, translit] = toAmharic(n)
+          return {
+            id: crypto.randomUUID(),
+            display: 'number' as const,
+            label: n >= 1000 ? n.toLocaleString('en-US') : String(n),
+            emphasize: n % 10 === 0 || n >= 1000,
+            audioUrl: '',
+            speakText: String(n),
+            imageUrl: '',
+            answer: '',
+            originalReading: isMark ? amReading : '',
+            transcription: isMark ? translit : '',
+            translation: isMark ? toEnglishWords(n) : '',
+          }
+        }),
       }
     }
     case 'audio_match': {
@@ -1710,10 +1848,14 @@ export function createBlock(
       return {
         id,
         type,
-        prompt: 'Record yourself speaking.',
-        instructions: 'Speak clearly. You may re-record before submitting.',
+        prompt: 'Write the word forms, then record yourself saying them.',
+        instructions:
+          'Fill in the Amharic word, English reading, and English translation. Then record yourself speaking clearly.',
         maxSeconds: 60,
         minSeconds: 5,
+        showAmharic: true,
+        showReading: true,
+        showTranslation: true,
       }
     case 'video_practice':
       return {

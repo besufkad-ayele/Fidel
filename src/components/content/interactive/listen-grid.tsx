@@ -68,6 +68,8 @@ export function InteractiveListenGrid({
   const [imageAnswers, setImageAnswers] = useState<Record<string, string>>({})
   const [completed, setCompleted] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  /** Cell whose reading/transcription/translation is currently revealed (hover/tap). */
+  const [revealId, setRevealId] = useState<string | null>(null)
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -101,18 +103,28 @@ export function InteractiveListenGrid({
   }
 
   function onHoverEnter(item: Item, pointerType: string) {
-    if (!isMarkMode || !listenEnabled) return
-    // Touch uses tap-to-play; hover is mouse/pen only
+    if (!isMarkMode) return
+    // Touch uses tap-to-reveal/play; hover is mouse/pen only
     if (pointerType === 'touch') return
-    if (!itemAudioSrc(item)) return
+    // Reveal the reading/transcription/translation while hovered.
+    setRevealId(item.id)
+    if (!listenEnabled || !itemAudioSrc(item)) return
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     // Small delay avoids rapid play/stop when skimming across cells
     hoverTimer.current = setTimeout(() => playItem(item), 80)
   }
 
+  function onHoverLeave(item: Item, pointerType: string) {
+    if (!isMarkMode || pointerType === 'touch') return
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    // Hide again once the pointer leaves the cell.
+    setRevealId((prev) => (prev === item.id ? null : prev))
+  }
+
   function onCellActivate(item: Item) {
     if (!isMarkMode) return
-    // Touch/keyboard: play on activate. Mouse hover already started playback.
+    // Touch/keyboard: reveal + play on activate. Mouse hover already handled both.
+    setRevealId(item.id)
     if (listenEnabled && itemAudioSrc(item) && activeId !== item.id) {
       playItem(item)
     }
@@ -152,7 +164,7 @@ export function InteractiveListenGrid({
         {block.prompt ? <p className="mt-1 text-sm text-green-700">{block.prompt}</p> : null}
         {isMarkMode ? (
           <p className="mt-1 text-xs text-green-600">
-            Hover a cell to hear its audio
+            Hover a cell to hear its audio and reveal the reading and meaning
             {mode === 'preview' ? ' (preview)' : ''}.
           </p>
         ) : null}
@@ -185,6 +197,7 @@ export function InteractiveListenGrid({
                 isMarkMode && canPlay && 'cursor-pointer',
               )}
               onPointerEnter={(e) => onHoverEnter(item, e.pointerType)}
+              onPointerLeave={(e) => onHoverLeave(item, e.pointerType)}
               onClick={() => onCellActivate(item)}
               role={isMarkMode && canPlay ? 'button' : undefined}
               tabIndex={isMarkMode && canPlay ? 0 : undefined}
@@ -227,6 +240,23 @@ export function InteractiveListenGrid({
                 ) : (
                   <LabelText text={item.label} emphasize={item.emphasize} />
                 )}
+
+                {/* Listen & mark: reading + transcription + translation revealed on hover/tap only. */}
+                {isMarkMode && revealId === item.id ? (
+                  <>
+                    {item.originalReading ? <LabelText text={item.originalReading} /> : null}
+                    {item.transcription ? (
+                      <p className="text-center text-xs italic leading-tight text-green-600">
+                        {item.transcription}
+                      </p>
+                    ) : null}
+                    {item.translation ? (
+                      <p className="text-center text-xs leading-tight text-green-800">
+                        {item.translation}
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
 
                 {/* Write mode: explicit play button. Mark mode: hover/tap plays — subtle cue only. */}
                 {!isMarkMode && canPlay ? (

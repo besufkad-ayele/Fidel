@@ -630,6 +630,17 @@ function renderBlock(
           assignmentId={opts?.assignmentId}
           alreadySubmitted={opts?.alreadySubmitted}
           blockId={block.id}
+          promptFields={[
+            ...(block.showAmharic !== false
+              ? [{ id: 'amharic' as const, label: 'Amharic word' }]
+              : []),
+            ...(block.showReading !== false
+              ? [{ id: 'reading' as const, label: 'English reading' }]
+              : []),
+            ...(block.showTranslation !== false
+              ? [{ id: 'translation' as const, label: 'English translation' }]
+              : []),
+          ]}
         />
       )
     case 'video_practice':

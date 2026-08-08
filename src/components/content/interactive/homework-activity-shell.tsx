@@ -23,6 +23,8 @@ type IdCardHandle = {
   setInvalidFields: (ids: string[]) => void
 }
 
+type RecordingTextField = { id: string; label: string }
+
 type RecordingHandle = {
   blockId: string
   kind: 'audio' | 'video'
@@ -30,6 +32,10 @@ type RecordingHandle = {
   getBlob: () => Blob | null
   getDurationSec: () => number
   setInvalid: (message: string | null) => void
+  /** Optional text blanks (e.g. Amharic / reading / translation on voice tasks) */
+  textFields?: RecordingTextField[]
+  getTextAnswers?: () => Record<string, string>
+  setInvalidTextFields?: (ids: string[]) => void
 }
 
 type HomeworkActivityContextValue = {
@@ -58,6 +64,20 @@ function formatIdCardText(handles: IdCardHandle[]) {
     const lines = handle.fields.map((f) => {
       const value = (answers[f.id] ?? '').trim()
       return `${f.label || 'Field'}: ${value || '—'}`
+    })
+    sections.push(lines.join('\n'))
+  }
+  return sections.join('\n\n')
+}
+
+function formatRecordingText(handles: RecordingHandle[]) {
+  const sections: string[] = []
+  for (const handle of handles) {
+    if (!handle.textFields?.length || !handle.getTextAnswers) continue
+    const answers = handle.getTextAnswers()
+    const lines = handle.textFields.map((f) => {
+      const value = (answers[f.id] ?? '').trim()
+      return `${f.label}: ${value || '—'}`
     })
     sections.push(lines.join('\n'))
   }
@@ -134,6 +154,15 @@ export function HomeworkActivityShell({
     }
 
     for (const rec of recordings) {
+      if (rec.textFields?.length && rec.getTextAnswers) {
+        const answers = rec.getTextAnswers()
+        const empty = rec.textFields.filter((f) => !(answers[f.id] ?? '').trim())
+        rec.setInvalidTextFields?.(empty.map((f) => f.id))
+        for (const field of empty) {
+          missing.push(`Fill in: ${field.label}`)
+        }
+      }
+
       const blob = rec.getBlob()
       const duration = rec.getDurationSec()
       if (!blob || blob.size === 0) {
@@ -169,6 +198,12 @@ export function HomeworkActivityShell({
 
         if (idCards.length > 0) {
           formData.set('text', formatIdCardText(idCards))
+        }
+
+        const recordingText = formatRecordingText(recordings)
+        if (recordingText) {
+          const existing = (formData.get('text') as string | null) ?? ''
+          formData.set('text', existing ? `${existing}\n\n${recordingText}` : recordingText)
         }
 
         const audioRec = recordings.find((r) => r.kind === 'audio' && r.getBlob()?.size)

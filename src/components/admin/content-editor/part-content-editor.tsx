@@ -2360,7 +2360,7 @@ function BlockFields({
             </select>
             <p className="mt-1 text-xs text-muted-foreground">
               {isMarkMode
-                ? 'Students hover a cell (number, word, or image) to hear only that cell’s uploaded audio, then press one “I understand” button.'
+                ? 'You provide each cell: the audio, the label (Amharic / any language), the original-language reading, the English transcription, and the translation. The label stays visible; students hover (or tap) a cell to hear the audio and reveal the reading, transcription, and translation — no blanks to fill.'
                 : 'Students play cell audio and write number, word, or image answers below.'}
             </p>
           </div>
@@ -2526,15 +2526,47 @@ function BlockFields({
                     }}
                   />
                 ) : null}
-                <Input
-                  placeholder="Expected answer (optional self-check)"
-                  value={item.answer ?? ''}
-                  onChange={(e) => {
-                    const items = [...block.items]
-                    items[i] = { ...item, answer: e.target.value }
-                    onChange({ ...block, items })
-                  }}
-                />
+                {isMarkMode ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      placeholder="Original language reading (e.g. ሁለት)"
+                      value={item.originalReading ?? ''}
+                      onChange={(e) => {
+                        const items = [...block.items]
+                        items[i] = { ...item, originalReading: e.target.value }
+                        onChange({ ...block, items })
+                      }}
+                    />
+                    <Input
+                      placeholder="English transcription (how it reads)"
+                      value={item.transcription ?? ''}
+                      onChange={(e) => {
+                        const items = [...block.items]
+                        items[i] = { ...item, transcription: e.target.value }
+                        onChange({ ...block, items })
+                      }}
+                    />
+                    <Input
+                      placeholder="English translation (meaning)"
+                      value={item.translation ?? ''}
+                      onChange={(e) => {
+                        const items = [...block.items]
+                        items[i] = { ...item, translation: e.target.value }
+                        onChange({ ...block, items })
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <Input
+                    placeholder="Expected answer (optional self-check)"
+                    value={item.answer ?? ''}
+                    onChange={(e) => {
+                      const items = [...block.items]
+                      items[i] = { ...item, answer: e.target.value }
+                      onChange({ ...block, items })
+                    }}
+                  />
+                )}
               </div>
             ))}
             <Button
@@ -2555,6 +2587,9 @@ function BlockFields({
                       speakText: '',
                       imageUrl: '',
                       answer: '',
+                      originalReading: '',
+                      transcription: '',
+                      translation: '',
                     },
                   ],
                 })
@@ -4208,17 +4243,50 @@ function BlockFields({
             />
           </div>
           {block.type === 'speaking_task' ? (
-            <div>
-              <Label>Min seconds</Label>
-              <Input
-                type="number"
-                className="mt-1.5"
-                value={block.minSeconds}
-                onChange={(e) =>
-                  onChange({ ...block, minSeconds: Number(e.target.value) || 0 })
-                }
-              />
-            </div>
+            <>
+              <div>
+                <Label>Min seconds</Label>
+                <Input
+                  type="number"
+                  className="mt-1.5"
+                  value={block.minSeconds}
+                  onChange={(e) =>
+                    onChange({ ...block, minSeconds: Number(e.target.value) || 0 })
+                  }
+                />
+              </div>
+              <div className="space-y-2 rounded-lg border border-cream-200 p-3">
+                <Label>Student text blanks</Label>
+                <p className="text-xs text-muted-foreground">
+                  Shown above the recorder so students write the Amharic word, English reading, and
+                  translation.
+                </p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={block.showAmharic ?? true}
+                    onChange={(e) => onChange({ ...block, showAmharic: e.target.checked })}
+                  />
+                  Amharic word
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={block.showReading ?? true}
+                    onChange={(e) => onChange({ ...block, showReading: e.target.checked })}
+                  />
+                  English reading
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={block.showTranslation ?? true}
+                    onChange={(e) => onChange({ ...block, showTranslation: e.target.checked })}
+                  />
+                  English translation
+                </label>
+              </div>
+            </>
           ) : (
             <label className="flex items-center gap-2 text-sm">
               <input
